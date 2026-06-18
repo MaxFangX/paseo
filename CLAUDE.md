@@ -1,3 +1,11 @@
+<!-- PATCH(fork-instructions) -->
+
+> [!IMPORTANT]
+> **Downstream fork (maxfangx).** Our commits are continually rebased onto new
+> upstream Paseo releases. Architect every change for rebasability: prefer new
+> files over edits, and keep unavoidable upstream edits additive, minimal, and
+> tagged `PATCH(<feature>)`. See [FORK.md](FORK.md) before making changes.
+
 # CLAUDE.md
 
 Paseo is a mobile app for monitoring and controlling your local AI coding agents from anywhere. Your dev environment, in your pocket. Connects directly to your actual development environment — your code stays on your machine.
