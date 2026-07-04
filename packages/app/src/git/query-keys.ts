@@ -13,6 +13,9 @@ interface CheckoutQueryScope {
 
 type CheckoutQueryKey = readonly unknown[];
 
+// FORK(checkoutStagedModes): "staged"/"unstaged" require the checkoutStagedModes daemon capability.
+export type CheckoutDiffMode = "uncommitted" | "base" | "staged" | "unstaged";
+
 export function checkoutStatusQueryKey(serverId: string, cwd: string) {
   return ["checkoutStatus", serverId, cwd] as const;
 }
@@ -20,7 +23,7 @@ export function checkoutStatusQueryKey(serverId: string, cwd: string) {
 export function checkoutDiffQueryKey(
   serverId: string,
   cwd: string,
-  mode: "uncommitted" | "base",
+  mode: CheckoutDiffMode,
   baseRef?: string,
   ignoreWhitespace?: boolean,
 ) {

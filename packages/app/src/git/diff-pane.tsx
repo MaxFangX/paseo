@@ -105,6 +105,7 @@ import {
   useResolvedDiffMode,
   useSetDiffModeOverride,
   type ReviewDraftComment,
+  type ReviewDraftMode,
   getInlineReviewThreadState,
   getSplitInlineReviewThreadState,
   InlineReviewGutterCell,
@@ -1437,18 +1438,44 @@ function getDiffContentLength(file: ParsedDiffFile): number {
   return contentLength;
 }
 
+// FORK(checkoutStagedModes): trigger label across all four diff modes.
+function computeDiffModeLabel(
+  diffMode: ReviewDraftMode,
+  labels: { uncommitted: string; committed: string; staged: string; unstaged: string },
+): string {
+  switch (diffMode) {
+    case "uncommitted":
+      return labels.uncommitted;
+    case "staged":
+      return labels.staged;
+    case "unstaged":
+      return labels.unstaged;
+    default:
+      return labels.committed;
+  }
+}
+
 function computeEmptyMessage(
   hideWhitespace: boolean,
-  diffMode: "uncommitted" | "base",
+  diffMode: ReviewDraftMode,
   baseRefLabel: string,
   labels: {
     hiddenWhitespace: string;
     uncommitted: string;
+    staged: string;
+    unstaged: string;
     againstBase: (baseRefLabel: string) => string;
   },
 ): string {
   if (hideWhitespace) {
     return labels.hiddenWhitespace;
+  }
+  // FORK(checkoutStagedModes): staged/unstaged empty states.
+  if (diffMode === "staged") {
+    return labels.staged;
+  }
+  if (diffMode === "unstaged") {
+    return labels.unstaged;
   }
   if (diffMode === "uncommitted") {
     return labels.uncommitted;
@@ -1755,6 +1782,10 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
   const refreshSupported = useSessionStore(
     (s) => s.sessions[serverId]?.serverInfo?.features?.checkoutRefresh === true,
   );
+  // FORK(checkoutStagedModes): gate staged/unstaged dropdown items on daemon capability.
+  const stagedModesSupported = useSessionStore(
+    (s) => s.sessions[serverId]?.serverInfo?.features?.checkoutStagedModes === true,
+  );
   const runRefresh = useCheckoutGitActionsStore((s) => s.refresh);
   const isRefreshing =
     useCheckoutGitActionsStore((s) => s.getStatus({ serverId, cwd, actionId: "refresh" })) ===
@@ -1832,6 +1863,21 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
     setDiffModeOverride({
       scopeKey: reviewDraftScopeKey,
       override: { serverId, cwd, mode: "base", isDirtyAtSelection: hasUncommittedChanges },
+    });
+  }, [cwd, hasUncommittedChanges, reviewDraftScopeKey, serverId, setDiffModeOverride]);
+
+  // FORK(checkoutStagedModes): manual staged/unstaged mode selection.
+  const handleSelectStaged = useCallback(() => {
+    setDiffModeOverride({
+      scopeKey: reviewDraftScopeKey,
+      override: { serverId, cwd, mode: "staged", isDirtyAtSelection: hasUncommittedChanges },
+    });
+  }, [cwd, hasUncommittedChanges, reviewDraftScopeKey, serverId, setDiffModeOverride]);
+
+  const handleSelectUnstaged = useCallback(() => {
+    setDiffModeOverride({
+      scopeKey: reviewDraftScopeKey,
+      override: { serverId, cwd, mode: "unstaged", isDirtyAtSelection: hasUncommittedChanges },
     });
   }, [cwd, hasUncommittedChanges, reviewDraftScopeKey, serverId, setDiffModeOverride]);
 
@@ -2212,6 +2258,14 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
   );
   const uncommittedLabel = t("workspace.git.diff.uncommitted");
   const committedLabel = t("workspace.git.diff.committed");
+  const stagedLabel = t("workspace.git.diff.staged");
+  const unstagedLabel = t("workspace.git.diff.unstaged");
+  const diffModeLabel = computeDiffModeLabel(diffMode, {
+    uncommitted: uncommittedLabel,
+    committed: committedLabel,
+    staged: stagedLabel,
+    unstaged: unstagedLabel,
+  });
 
   const emptyMessage = computeEmptyMessage(
     changesPreferences.hideWhitespace,
@@ -2220,6 +2274,8 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
     {
       hiddenWhitespace: t("workspace.git.diff.emptyHiddenWhitespace"),
       uncommitted: t("workspace.git.diff.emptyUncommitted"),
+      staged: t("workspace.git.diff.emptyStaged"),
+      unstaged: t("workspace.git.diff.emptyUnstaged"),
       againstBase: (label) => t("workspace.git.diff.emptyAgainstBase", { baseRef: label }),
     },
   );
@@ -2276,7 +2332,7 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
                 accessibilityLabel={t("workspace.git.diff.diffMode")}
               >
                 <Text style={styles.diffStatusText} numberOfLines={1}>
-                  {diffMode === "uncommitted" ? uncommittedLabel : committedLabel}
+                  {diffModeLabel}
                 </Text>
                 <ThemedChevronDown size={12} uniProps={foregroundMutedIconColorMapping} />
               </DropdownMenuTrigger>
@@ -2297,6 +2353,28 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
                 >
                   {committedLabel}
                 </DropdownMenuItem>
+                {/* FORK(checkoutStagedModes): staged/unstaged options, gated on capability. */}
+                {stagedModesSupported ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      testID="changes-diff-mode-staged"
+                      selected={diffMode === "staged"}
+                      description={t("workspace.git.diff.stagedDescription")}
+                      onSelect={handleSelectStaged}
+                    >
+                      {stagedLabel}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      testID="changes-diff-mode-unstaged"
+                      selected={diffMode === "unstaged"}
+                      description={t("workspace.git.diff.unstagedDescription")}
+                      onSelect={handleSelectUnstaged}
+                    >
+                      {unstagedLabel}
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
             <View style={styles.diffStatusButtons}>

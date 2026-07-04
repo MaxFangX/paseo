@@ -107,6 +107,10 @@ export class CheckoutDiffManager {
 
   private normalizeCompare(compare: CheckoutDiffCompareInput): CheckoutDiffCompareInput {
     const ignoreWhitespace = compare.ignoreWhitespace === true;
+    // FORK(checkoutStagedModes): staged/unstaged carry no baseRef, like uncommitted.
+    if (compare.mode === "staged" || compare.mode === "unstaged") {
+      return { mode: compare.mode, ignoreWhitespace };
+    }
     if (compare.mode === "uncommitted") {
       return { mode: "uncommitted", ignoreWhitespace };
     }

@@ -378,6 +378,45 @@ describe("checkout git utilities", () => {
     expect(message).toBe("update file");
   });
 
+  // FORK(checkoutStagedModes): staged/unstaged diff views.
+  it("separates staged and unstaged changes", async () => {
+    // Stage one file, leave another modified in the working tree only.
+    writeFileSync(join(repoDir, "staged.txt"), "staged content\n");
+    execFileSync("git", ["add", "staged.txt"], { cwd: repoDir });
+    writeFileSync(join(repoDir, "file.txt"), "unstaged change\n");
+
+    const staged = await getCheckoutDiff(repoDir, { mode: "staged" });
+    expect(staged.diff).toContain("staged.txt");
+    expect(staged.diff).toContain("+staged content");
+    expect(staged.diff).not.toContain("file.txt");
+
+    const unstaged = await getCheckoutDiff(repoDir, { mode: "unstaged" });
+    expect(unstaged.diff).toContain("file.txt");
+    expect(unstaged.diff).toContain("+unstaged change");
+    expect(unstaged.diff).not.toContain("staged.txt");
+
+    // The uncommitted view still shows both sides combined.
+    const uncommitted = await getCheckoutDiff(repoDir, { mode: "uncommitted" });
+    expect(uncommitted.diff).toContain("staged.txt");
+    expect(uncommitted.diff).toContain("file.txt");
+  });
+
+  it("produces structured staged diffs against HEAD", async () => {
+    writeFileSync(join(repoDir, "file.txt"), "hello\nworld\n");
+    execFileSync("git", ["add", "file.txt"], { cwd: repoDir });
+
+    const staged = await getCheckoutDiff(repoDir, { mode: "staged", includeStructured: true });
+    expect(staged.structured?.map((file) => file.path)).toEqual(["file.txt"]);
+    expect(staged.diff).toContain("+world");
+  });
+
+  it("returns no staged changes when nothing is staged", async () => {
+    writeFileSync(join(repoDir, "file.txt"), "only working tree\n");
+
+    const staged = await getCheckoutDiff(repoDir, { mode: "staged" });
+    expect(staged.diff).toBe("");
+  });
+
   it("reuses checkout snapshot facts across status, shortstat, and PR status reads", async () => {
     setupRemoteTrackingMain(repoDir, tempDir);
     execFileSync("git", ["checkout", "-b", "feature/facts"], { cwd: repoDir });

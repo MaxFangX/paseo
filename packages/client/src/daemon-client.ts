@@ -299,6 +299,13 @@ type SubscribeCheckoutDiffPayload = Extract<
   { type: "subscribe_checkout_diff_response" }
 >["payload"];
 type CheckoutDiffPayload = Omit<SubscribeCheckoutDiffPayload, "subscriptionId">;
+// FORK(checkoutStagedModes): shared compare shape; "staged"/"unstaged" require the
+// checkoutStagedModes daemon capability (gated client-side).
+interface CheckoutDiffCompare {
+  mode: "uncommitted" | "base" | "staged" | "unstaged";
+  baseRef?: string;
+  ignoreWhitespace?: boolean;
+}
 type CheckoutCommitPayload = CheckoutCommitResponse["payload"];
 type CheckoutMergePayload = CheckoutMergeResponse["payload"];
 type CheckoutMergeFromBasePayload = CheckoutMergeFromBaseResponse["payload"];
@@ -976,7 +983,7 @@ export class DaemonClient {
     string,
     {
       cwd: string;
-      compare: { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean };
+      compare: CheckoutDiffCompare;
     }
   >();
   private terminalDirectorySubscriptions = new Map<string, { cwd: string; workspaceId?: string }>();
@@ -3053,11 +3060,13 @@ export class DaemonClient {
     return responsePromise;
   }
 
-  private normalizeCheckoutDiffCompare(compare: {
-    mode: "uncommitted" | "base";
-    baseRef?: string;
-    ignoreWhitespace?: boolean;
-  }): { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean } {
+  private normalizeCheckoutDiffCompare(compare: CheckoutDiffCompare): CheckoutDiffCompare {
+    // FORK(checkoutStagedModes): staged/unstaged carry no baseRef, like uncommitted.
+    if (compare.mode === "staged" || compare.mode === "unstaged") {
+      return compare.ignoreWhitespace === true
+        ? { mode: compare.mode, ignoreWhitespace: true }
+        : { mode: compare.mode };
+    }
     if (compare.mode === "uncommitted") {
       return compare.ignoreWhitespace === true
         ? { mode: "uncommitted", ignoreWhitespace: true }
@@ -3076,7 +3085,7 @@ export class DaemonClient {
 
   async getCheckoutDiff(
     cwd: string,
-    compare: { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean },
+    compare: CheckoutDiffCompare,
     requestId?: string,
   ): Promise<CheckoutDiffPayload> {
     const oneShotSubscriptionId = `oneshot-checkout-diff:${crypto.randomUUID()}`;
@@ -3102,7 +3111,7 @@ export class DaemonClient {
 
   async subscribeCheckoutDiff(
     cwd: string,
-    compare: { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean },
+    compare: CheckoutDiffCompare,
     options?: { subscriptionId?: string; requestId?: string },
   ): Promise<SubscribeCheckoutDiffPayload> {
     const subscriptionId = options?.subscriptionId ?? crypto.randomUUID();

@@ -182,10 +182,15 @@ interface CheckoutDiffRefs {
   baseRef: string;
   targetRef?: string;
   includeUntracked: boolean;
+  // FORK(checkoutStagedModes): explicit `git diff` args for the staged/unstaged modes
+  // (`--cached` / no ref), which don't fit the baseRef/targetRef pair. When set it overrides
+  // the positional refs for the diff command; baseRef/targetRef still drive whole-file
+  // highlighting context.
+  diffArgs?: string[];
 }
 
 function getCheckoutDiffRefArgs(refs: CheckoutDiffRefs): string[] {
-  return [refs.baseRef, ...(refs.targetRef ? [refs.targetRef] : [])];
+  return refs.diffArgs ?? [refs.baseRef, ...(refs.targetRef ? [refs.targetRef] : [])];
 }
 
 function normalizeBranchSuggestionName(raw: string): string | null {
@@ -760,7 +765,8 @@ export interface CheckoutDiffResult {
 }
 
 export interface CheckoutDiffCompare {
-  mode: "uncommitted" | "base";
+  // FORK(checkoutStagedModes): "staged"/"unstaged" added.
+  mode: "uncommitted" | "base" | "staged" | "unstaged";
   baseRef?: string;
   ignoreWhitespace?: boolean;
   includeStructured?: boolean;
@@ -2389,6 +2395,16 @@ async function resolveCheckoutDiffRefs(
   compare: CheckoutDiffCompare,
   context: CheckoutContext | undefined,
 ): Promise<CheckoutDiffRefs | null> {
+  // FORK(checkoutStagedModes): staged/unstaged diff against the index, which `git diff` expresses
+  // with `--cached` / no ref rather than a baseRef/targetRef pair. baseRef still feeds whole-file
+  // highlighting context — "HEAD" for staged, "" (the index, via `git show :path`) for unstaged.
+  // Like the uncommitted view, the new side reads from the working copy, so no targetRef.
+  if (compare.mode === "staged") {
+    return { baseRef: "HEAD", includeUntracked: false, diffArgs: ["--cached"] };
+  }
+  if (compare.mode === "unstaged") {
+    return { baseRef: "", includeUntracked: false, diffArgs: [] };
+  }
   if (compare.mode === "uncommitted") {
     return { baseRef: "HEAD", includeUntracked: true };
   }

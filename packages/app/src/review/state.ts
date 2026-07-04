@@ -1,4 +1,6 @@
-export type ReviewDraftMode = "uncommitted" | "base";
+// FORK(checkoutStagedModes): "uncommitted"/"base" are the auto-resolving pair (see resolveDiffMode);
+// "staged"/"unstaged" are manual-only selections, never auto-picked, and require the capability.
+export type ReviewDraftMode = "uncommitted" | "base" | "staged" | "unstaged";
 export type ReviewDraftSide = "old" | "new";
 
 export interface ReviewDraftComment {

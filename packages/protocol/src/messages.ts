@@ -892,7 +892,8 @@ export const ReviewAttachmentSchema = z.object({
   type: z.literal("review"),
   mimeType: z.literal("application/paseo-review"),
   cwd: z.string(),
-  mode: z.enum(["uncommitted", "base"]),
+  // FORK(checkoutStagedModes): "staged"/"unstaged" added to match CheckoutDiffCompareSchema.
+  mode: z.enum(["uncommitted", "base", "staged", "unstaged"]),
   baseRef: z.string().nullable().optional(),
   comments: z.array(ReviewAttachmentCommentSchema),
 });
@@ -1466,7 +1467,8 @@ const CheckoutErrorSchema = z.object({
 });
 
 const CheckoutDiffCompareSchema = z.object({
-  mode: z.enum(["uncommitted", "base"]),
+  // FORK(checkoutStagedModes): "staged"/"unstaged" gated by server_info.features.checkoutStagedModes.
+  mode: z.enum(["uncommitted", "base", "staged", "unstaged"]),
   baseRef: z.string().optional(),
   ignoreWhitespace: z.boolean().optional(),
 });
@@ -2365,6 +2367,8 @@ export const ServerInfoStatusPayloadSchema = z
         daemonSelfUpdate: z.boolean().optional(),
         // COMPAT(agentForkContext): added in v0.1.102, remove gate after 2026-12-28.
         agentForkContext: z.boolean().optional(),
+        // FORK(checkoutStagedModes): staged/unstaged diff views capability flag.
+        checkoutStagedModes: z.boolean().optional(),
       })
       .optional(),
   })

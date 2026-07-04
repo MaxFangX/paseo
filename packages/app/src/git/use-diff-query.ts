@@ -3,12 +3,12 @@ import { useEffect, useId, useMemo } from "react";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import type { SubscribeCheckoutDiffResponse } from "@getpaseo/protocol/messages";
 import { orderCheckoutDiffFiles } from "@/git/diff-order";
-import { checkoutDiffQueryKey } from "@/git/query-keys";
+import { checkoutDiffQueryKey, type CheckoutDiffMode } from "@/git/query-keys";
 
 interface UseCheckoutDiffQueryOptions {
   serverId: string;
   cwd: string;
-  mode: "uncommitted" | "base";
+  mode: CheckoutDiffMode;
   baseRef?: string;
   ignoreWhitespace?: boolean;
   enabled?: boolean;
@@ -22,11 +22,15 @@ export type DiffLine = DiffHunk["lines"][number];
 export type HighlightToken = NonNullable<DiffLine["tokens"]>[number];
 
 function normalizeCheckoutDiffCompare(compare: {
-  mode: "uncommitted" | "base";
+  mode: CheckoutDiffMode;
   baseRef?: string;
   ignoreWhitespace?: boolean;
-}): { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean } {
+}): { mode: CheckoutDiffMode; baseRef?: string; ignoreWhitespace?: boolean } {
   const ignoreWhitespace = compare.ignoreWhitespace === true;
+  // FORK(checkoutStagedModes): staged/unstaged carry no baseRef, like uncommitted.
+  if (compare.mode === "staged" || compare.mode === "unstaged") {
+    return { mode: compare.mode, ignoreWhitespace };
+  }
   if (compare.mode === "uncommitted") {
     return { mode: "uncommitted", ignoreWhitespace };
   }
