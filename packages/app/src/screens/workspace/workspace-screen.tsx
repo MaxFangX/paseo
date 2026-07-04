@@ -1914,17 +1914,6 @@ function WorkspaceScreenContent({
     async (input: { tabId: string; terminalId: string }) => {
       const { tabId, terminalId } = input;
       await closeTab(tabId, async () => {
-        const confirmed = await confirmDialog({
-          title: t("workspace.tabs.confirmations.closeTerminalTitle"),
-          message: t("workspace.tabs.confirmations.closeTerminalMessage"),
-          confirmLabel: t("workspace.tabs.confirmations.close"),
-          cancelLabel: t("workspace.tabs.confirmations.cancel"),
-          destructive: true,
-        });
-        if (!confirmed) {
-          return;
-        }
-
         removeTerminalFromCache(terminalId);
         setHoveredCloseTabKey((current) => (current === tabId ? null : current));
         if (persistenceKey) {
@@ -1944,7 +1933,6 @@ function WorkspaceScreenContent({
       killTerminalAsync,
       persistenceKey,
       removeTerminalFromCache,
-      t,
     ],
   );
 
