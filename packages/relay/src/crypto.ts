@@ -23,6 +23,7 @@ export interface KeyPair {
 export type SharedKey = Uint8Array; // 32 bytes (box.before)
 
 const NONCE_LENGTH = nacl.box.nonceLength; // 24
+const ZERO_SHARED_SECRET = new Uint8Array(nacl.scalarMult.groupElementLength);
 
 let prngReady = false;
 
@@ -121,6 +122,14 @@ export function deriveSharedKey(ourSecretKey: Uint8Array, peerPublicKey: Uint8Ar
   if (peerPublicKey.byteLength !== nacl.box.publicKeyLength) {
     throw new Error(`Invalid peer public key length (expected ${nacl.box.publicKeyLength})`);
   }
+
+  // Low-order Curve25519 points produce an all-zero X25519 result. Check the
+  // raw result before box.before transforms it into a predictable non-zero key.
+  const rawSharedSecret = nacl.scalarMult(ourSecretKey, peerPublicKey);
+  if (nacl.verify(rawSharedSecret, ZERO_SHARED_SECRET)) {
+    throw new Error("Invalid peer public key (low-order Curve25519 point)");
+  }
+
   return nacl.box.before(peerPublicKey, ourSecretKey);
 }
 

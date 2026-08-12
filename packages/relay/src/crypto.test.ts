@@ -12,6 +12,11 @@ function decryptText(sharedKey: Uint8Array, ciphertext: ArrayBuffer): string {
   return new TextDecoder().decode(decrypt(sharedKey, ciphertext));
 }
 
+function deriveSharedKeyWithGeneratedSecret(peerPublicKey: Uint8Array): void {
+  const keypair = generateKeyPair();
+  deriveSharedKey(keypair.secretKey, peerPublicKey);
+}
+
 describe("crypto", () => {
   describe("generateKeyPair", () => {
     it("generates a valid keypair", () => {
@@ -62,6 +67,15 @@ describe("crypto", () => {
       const decrypted = decryptText(clientSharedKey, encrypted);
 
       expect(decrypted).toBe(testMessage);
+    });
+
+    it.each([
+      ["all-zero", new Uint8Array(32)],
+      ["u-coordinate one", Uint8Array.from([1, ...new Uint8Array(31)])],
+    ])("rejects the %s low-order public key", (_name, peerPublicKey) => {
+      expect(deriveSharedKeyWithGeneratedSecret.bind(null, peerPublicKey)).toThrow(
+        "Invalid peer public key (low-order Curve25519 point)",
+      );
     });
   });
 
