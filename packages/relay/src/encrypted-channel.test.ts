@@ -321,6 +321,23 @@ describe("EncryptedChannel", () => {
     await expect(daemonChannelPromise).rejects.toThrow("Invalid hello message");
   });
 
+  it("rejects a low-order client public key during the daemon handshake", async () => {
+    const [daemonTransport] = createMockTransportPair();
+    const daemonKeyPair = generateKeyPair();
+    const daemonChannelPromise = createDaemonChannel(daemonTransport, daemonKeyPair);
+
+    daemonTransport.onmessage?.({
+      data: JSON.stringify({
+        type: "e2ee_hello",
+        key: exportPublicKey(new Uint8Array(32)),
+      }),
+      isBinary: false,
+    });
+
+    await expect(daemonChannelPromise).rejects.toThrow("Invalid peer public key");
+    expect(daemonTransport.send).not.toHaveBeenCalled();
+  });
+
   it("accepts duplicate hello from the same client without re-keying", async () => {
     const [daemonTransport, clientTransport] = createMockTransportPair();
 
