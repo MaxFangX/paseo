@@ -1,0 +1,76 @@
+# Fork-only (maxfangx): unsigned production macOS arm64 desktop releases.
+# All logic lives in scripts/fork/release-macos-arm64.sh, which also runs
+# locally; this workflow is a thin trigger around it.
+name: fork-release-macos
+
+on:
+  # Dry-run the workflow on push to this branch: builds, smoke-tests, and
+  # packages, but never publishes. Real releases can only be triggered via
+  # workflow_dispatch.
+  push:
+    branches:
+      - release-test/fork-macos
+  # Trigger via GitHub UI: Actions -> fork-release-macos -> Run workflow,
+  # selecting the branch to build and release.
+  workflow_dispatch:
+    inputs:
+      is_dry_run:
+        description: "Skip publishing the GitHub release?"
+        required: true
+        type: boolean
+        default: false
+      is_draft:
+        description: "Mark release as draft?"
+        required: true
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@boudra"
+
+      - name: Install JS dependencies
+        run: node scripts/npm-retry.mjs ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build, smoke-test, and release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PASEO_FORK_RELEASE_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          args=(--branch "${{ github.ref_name }}")
+          if [[ "${{ github.event_name }}" == "push" || "${{ inputs.is_dry_run }}" == "true" ]]; then
+            args+=(--dry-run)
+          fi
+          if [[ "${{ inputs.is_draft }}" == "true" ]]; then
+            args+=(--draft)
+          fi
+          ./scripts/fork/release-macos-arm64.sh "${args[@]}"
+
+      - name: Upload artifacts to workflow (dry run)
+        if: github.event_name == 'push' || inputs.is_dry_run
+        uses: actions/upload-artifact@v4
+        with:
+          name: fork-macos-arm64
+          path: packages/desktop/release/fork/*.dmg
+          retention-days: 7
