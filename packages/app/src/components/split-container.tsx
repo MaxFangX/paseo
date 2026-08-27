@@ -46,6 +46,8 @@ import {
   splitNodeContainsPane,
 } from "@/components/split-container-focus";
 import { shouldFocusPaneFromEventTarget } from "@/components/split-container-pane-focus";
+// PATCH(split-sizes-reconcile)
+import { reconcileStoredSplitSizes } from "@/components/split-sizes-reconcile";
 import {
   removeWindowChromeCorner,
   WindowChromeRegion,
@@ -969,8 +971,12 @@ function SplitNodeView({
     groupId ? state.splitSizesByWorkspace[workspaceKey]?.[groupId] : undefined,
   );
   const groupChildren = node.kind === "group" ? node.group.children : EMPTY_SPLIT_NODES;
-  const groupSizes =
-    storedGroupSizes ?? (node.kind === "group" ? node.group.sizes : EMPTY_SPLIT_SIZES);
+  // PATCH(split-sizes-reconcile): stale stored sizes leave panes unresizable
+  const groupSizes = reconcileStoredSplitSizes(
+    storedGroupSizes,
+    node.kind === "group" ? node.group.sizes : EMPTY_SPLIT_SIZES,
+    groupChildren.length,
+  );
   const visibleFlex = useMemo(
     () => resolveVisibleGroupFlex(groupChildren, groupSizes, maximizedPaneId),
     [groupChildren, groupSizes, maximizedPaneId],
