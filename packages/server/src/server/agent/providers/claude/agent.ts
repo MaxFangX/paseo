@@ -2730,6 +2730,7 @@ class ClaudeAgentSession implements AgentSession {
   }
 
   async setThinkingOption(thinkingOptionId: string | null): Promise<void | AgentProviderNotice> {
+    const previousThinkingOptionId = this.config.thinkingOptionId; // PATCH(claude-midturn-restart)
     const normalizedThinkingOptionId =
       typeof thinkingOptionId === "string" && thinkingOptionId.trim().length > 0
         ? thinkingOptionId
@@ -2743,6 +2744,8 @@ class ClaudeAgentSession implements AgentSession {
     } else {
       throw new Error(`Unknown thinking option: ${normalizedThinkingOptionId}`);
     }
+    // PATCH(claude-midturn-restart): re-applying the current option needs no restart.
+    if (this.config.thinkingOptionId === previousThinkingOptionId) return;
     this.queryRestartNeeded = true;
     if (this.activeForegroundTurnId || this.autonomousTurn) {
       return THINKING_APPLIES_NEXT_TURN_NOTICE;

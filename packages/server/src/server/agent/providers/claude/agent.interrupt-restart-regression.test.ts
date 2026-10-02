@@ -1082,3 +1082,47 @@ test("auto-completes an open autonomous turn when a foreground prompt starts", a
   subscribedEvents.close();
   await session.close();
 });
+
+// PATCH(claude-midturn-restart): re-applying the current thinking option keeps the query.
+function createRespondingQueryFactory(sessionId: string): ScriptedQuery[] {
+  const queries: ScriptedQuery[] = [];
+  queryFactory.mockImplementation(({ prompt }: { prompt: AsyncIterable<unknown> }) => {
+    const scriptedQuery = createScriptedQuery({
+      prompt,
+      sessionId,
+      async handlePrompt({ promptRecord, query }) {
+        query.emit({
+          type: "assistant",
+          message: { content: `RESPONSE TO ${promptRecord.text}` },
+          session_id: sessionId,
+        });
+        query.emit(buildSuccessResult(sessionId));
+      },
+    });
+    queries.push(scriptedQuery);
+    return scriptedQuery;
+  });
+  return queries;
+}
+
+test("re-applying the current thinking option keeps the existing query", async () => {
+  const sessionId = "unchanged-thinking-session";
+  const queries = createRespondingQueryFactory(sessionId);
+  const session = await new ClaudeAgentClient({
+    logger: createTestLogger(),
+    queryFactory,
+    resolveBinary: async () => "/test/claude/bin",
+  }).createSession({ provider: "claude", cwd: process.cwd(), thinkingOptionId: "medium" });
+
+  await collectUntilTerminal(streamSession(session, "warm-up prompt"));
+  await session.setThinkingOption!("medium");
+  await collectUntilTerminal(streamSession(session, "follow-up prompt"));
+
+  expect(queryFactory).toHaveBeenCalledTimes(1);
+  expect(queries[0]?.prompts.map((prompt) => prompt.text)).toEqual([
+    "warm-up prompt",
+    "follow-up prompt",
+  ]);
+
+  await session.close();
+});
