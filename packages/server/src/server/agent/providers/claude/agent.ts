@@ -2475,6 +2475,7 @@ class ClaudeAgentSession implements AgentSession {
   }
 
   async setThinkingOption(thinkingOptionId: string | null): Promise<void | AgentProviderNotice> {
+    const previousThinkingOptionId = this.config.thinkingOptionId; // PATCH(claude-midturn-restart)
     const normalizedThinkingOptionId =
       typeof thinkingOptionId === "string" && thinkingOptionId.trim().length > 0
         ? thinkingOptionId
@@ -2488,6 +2489,8 @@ class ClaudeAgentSession implements AgentSession {
     } else {
       throw new Error(`Unknown thinking option: ${normalizedThinkingOptionId}`);
     }
+    // PATCH(claude-midturn-restart): re-applying the current option needs no restart.
+    if (this.config.thinkingOptionId === previousThinkingOptionId) return;
     this.queryRestartNeeded = true;
     if (this.activeForegroundTurnId || this.autonomousTurn) {
       return THINKING_APPLIES_NEXT_TURN_NOTICE;
@@ -3109,6 +3112,11 @@ class ClaudeAgentSession implements AgentSession {
   }
 
   private async ensureQuery(): Promise<Query> {
+    // PATCH(claude-midturn-restart): restarting retires the process this turn runs on, leaving
+    // the turn open forever. Keep the live query; the next turn's start applies the restart.
+    if (this.query && this.activeForegroundQuery === this.query) {
+      return this.query;
+    }
     if (this.query && !this.queryRestartNeeded) {
       return this.query;
     }
