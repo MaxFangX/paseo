@@ -40,6 +40,7 @@ import {
   bucketFromStagingUserId,
   checkForAppUpdate,
   createAppUpdateLifecycleLogger,
+  installAppUpdateOnQuit,
   resolveStagingUserId,
   rolloutManifestSchema,
   shouldAdmitToRollout,
@@ -315,5 +316,31 @@ describe("shouldAdmitToRollout", () => {
     } finally {
       await rm(tempDir, { force: true, recursive: true });
     }
+  });
+});
+
+// PATCH(no-install-on-quit): quitting never installs; an update installs only when asked.
+describe("installAppUpdateOnQuit", () => {
+  it("never installs a downloaded update on quit", async () => {
+    const updateInfo = { version: "9.9.9", files: [], path: "", sha512: "", releaseDate: "" };
+    const checkResult = { isUpdateAvailable: true, updateInfo };
+    autoUpdaterMock.checkForUpdates
+      .mockResolvedValueOnce(checkResult)
+      .mockResolvedValueOnce(checkResult);
+    await checkForAppUpdate({
+      currentVersion: "1.2.3",
+      releaseChannel: "stable",
+      intent: "manual",
+    });
+    autoUpdaterMock.handlers.get("update-downloaded")?.(updateInfo);
+
+    const installed = await installAppUpdateOnQuit({
+      currentVersion: "1.2.3",
+      releaseChannel: "stable",
+      signal: new AbortController().signal,
+    });
+
+    expect(installed).toBe(false);
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled();
   });
 });
