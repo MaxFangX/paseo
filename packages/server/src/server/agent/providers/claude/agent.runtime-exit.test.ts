@@ -258,7 +258,7 @@ describe("Claude runtime exit", () => {
 
       // Restarts the query on the next call, which retires the current process
       // while no turn is running.
-      await session.setThinkingOption(null);
+      await session.setThinkingOption("low"); // PATCH(claude-midturn-restart): must change
       await session.listCommands();
 
       expect(events.some((event) => event.type === "turn_failed")).toBe(false);
