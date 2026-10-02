@@ -1042,3 +1042,87 @@ test("auto-completes an open autonomous turn when a foreground prompt starts", a
   subscribedEvents.close();
   await session.close();
 });
+
+// PATCH(claude-midturn-restart): a pending restart must wait for the running turn to end.
+function createHeldFirstTurnQueryFactory(sessionId: string): ScriptedQuery[] {
+  const queries: ScriptedQuery[] = [];
+  queryFactory.mockImplementation(({ prompt }: { prompt: AsyncIterable<unknown> }) => {
+    const scriptedQuery = createScriptedQuery({
+      prompt,
+      sessionId,
+      async handlePrompt({ promptRecord, query }) {
+        // Hold the first turn open so the test controls when it ends.
+        if (promptRecord.text === "first prompt") return;
+        query.emit({
+          type: "assistant",
+          message: { content: `RESPONSE TO ${promptRecord.text}` },
+          session_id: sessionId,
+        });
+        query.emit(buildSuccessResult(sessionId));
+      },
+    });
+    queries.push(scriptedQuery);
+    return scriptedQuery;
+  });
+  return queries;
+}
+
+test("a mid-turn thinking change waits for the turn to end before restarting the query", async () => {
+  const sessionId = "midturn-restart-session";
+  const queries = createHeldFirstTurnQueryFactory(sessionId);
+  const session = await new ClaudeAgentClient({
+    logger: createTestLogger(),
+    queryFactory,
+    resolveBinary: async () => "/test/claude/bin",
+  }).createSession({ provider: "claude", cwd: process.cwd(), thinkingOptionId: "high" });
+
+  const firstTurn = streamSession(session, "first prompt");
+  await firstTurn.next();
+  await waitFor(() => queries[0]?.prompts.length === 1);
+
+  // Mid-turn: a thinking change, then "/" in the composer, which lists commands.
+  await session.setThinkingOption!("medium");
+  await session.listCommands!();
+
+  expect(queryFactory).toHaveBeenCalledTimes(1);
+  expect(queries[0]?.return).not.toHaveBeenCalled();
+
+  queries[0]?.emit({
+    type: "assistant",
+    message: { content: "FIRST_RESPONSE" },
+    session_id: sessionId,
+  });
+  queries[0]?.emit(buildSuccessResult(sessionId));
+  const firstTurnEvents = await collectUntilTerminal(firstTurn);
+  expect(firstTurnEvents.some((event) => event.type === "turn_completed")).toBe(true);
+  expect(collectAssistantText(firstTurnEvents)).toContain("FIRST_RESPONSE");
+
+  // The deferred restart applies the new thinking option on the next turn.
+  await collectUntilTerminal(streamSession(session, "second prompt"));
+  expect(queryFactory).toHaveBeenCalledTimes(2);
+  expect(queries[1]?.prompts.map((prompt) => prompt.text)).toEqual(["second prompt"]);
+
+  await session.close();
+});
+
+test("re-applying the current thinking option keeps the existing query", async () => {
+  const sessionId = "unchanged-thinking-session";
+  const queries = createHeldFirstTurnQueryFactory(sessionId);
+  const session = await new ClaudeAgentClient({
+    logger: createTestLogger(),
+    queryFactory,
+    resolveBinary: async () => "/test/claude/bin",
+  }).createSession({ provider: "claude", cwd: process.cwd(), thinkingOptionId: "medium" });
+
+  await collectUntilTerminal(streamSession(session, "warm-up prompt"));
+  await session.setThinkingOption!("medium");
+  await collectUntilTerminal(streamSession(session, "follow-up prompt"));
+
+  expect(queryFactory).toHaveBeenCalledTimes(1);
+  expect(queries[0]?.prompts.map((prompt) => prompt.text)).toEqual([
+    "warm-up prompt",
+    "follow-up prompt",
+  ]);
+
+  await session.close();
+});
