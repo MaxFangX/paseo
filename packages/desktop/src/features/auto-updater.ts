@@ -285,6 +285,10 @@ export async function downloadAndInstallUpdate(
   );
 }
 
+// PATCH(no-install-on-quit): nix pins fork builds (home-manager copyApps), so a silent install on
+// quit would drift the app from its pin. Updates still download; they install only when asked.
+const NEVER_INSTALL_ON_QUIT = true;
+
 export async function installAppUpdateOnQuit({
   currentVersion,
   releaseChannel,
@@ -294,6 +298,7 @@ export async function installAppUpdateOnQuit({
   releaseChannel: AppReleaseChannel;
   signal: AbortSignal;
 }): Promise<boolean> {
+  if (NEVER_INSTALL_ON_QUIT) return false; // PATCH(no-install-on-quit)
   if (
     !shouldInstallAppUpdateOnQuit({
       platform: process.platform,
