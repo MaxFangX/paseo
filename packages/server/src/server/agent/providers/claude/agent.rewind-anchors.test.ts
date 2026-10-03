@@ -267,3 +267,33 @@ describe("Claude rewind after a turn whose last assistant message came from a su
     expect(rewindSdk.recordedForks).toEqual([{ upToMessageId: "assistant-1" }]);
   });
 });
+
+// PATCH(native-fork)
+describe("Claude native fork", () => {
+  test("forks through the target turn's own reply into a new persistence handle", async () => {
+    const conversation = createConversation([
+      { assistantMessageId: "assistant-1" },
+      { assistantMessageId: "assistant-2" },
+    ]);
+    const rewindSdk = new FakeClaudeSdk();
+    rewindSdk.setNextSessionId("forked-session-7");
+    const session = await createSession(conversation, rewindSdk);
+
+    try {
+      await runTurns(session, 2);
+      const handle = await session.forkConversation?.({
+        userMessageId: conversation.userMessageIds[0],
+      });
+      expect(handle).toMatchObject({
+        provider: "claude",
+        sessionId: "forked-session-7",
+        nativeHandle: "forked-session-7",
+        metadata: { model: "claude-sonnet-4-6" },
+      });
+    } finally {
+      await session.close();
+    }
+
+    expect(rewindSdk.recordedForks).toEqual([{ upToMessageId: "assistant-1" }]);
+  });
+});

@@ -698,6 +698,9 @@ export interface AgentSession {
   revertConversation?(input: { messageId: string }): Promise<void>;
   revertFiles?(input: { messageId: string }): Promise<void>;
   revertBoth?(input: { messageId: string }): Promise<void>;
+  // PATCH(native-fork): copies the session through the turn opened by `userMessageId` into a
+  // new, independently resumable session and returns its persistence handle.
+  forkConversation?(input: { userMessageId: string }): Promise<AgentPersistenceHandle>;
   /**
    * Out-of-band prompt handler. When non-null, the manager runs the returned
    * handler instead of allocating a turn. The handler emits stream events
