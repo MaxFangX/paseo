@@ -52,6 +52,7 @@ import type {
   FileWriteResult,
   FetchAgentTimelineResponseMessage,
   AgentForkContextResponseMessage,
+  AgentForkNativeResponseMessage, // PATCH(native-fork)
   GitSetupOptions,
   CheckoutStatusResponse,
   CheckoutCommit,
@@ -674,6 +675,7 @@ type ScheduleUpdatePayload = Extract<
 >["payload"];
 export type FetchAgentTimelinePayload = FetchAgentTimelineResponseMessage["payload"];
 export type AgentForkContextPayload = AgentForkContextResponseMessage["payload"];
+export type AgentForkNativePayload = AgentForkNativeResponseMessage["payload"]; // PATCH(native-fork)
 
 export type FetchAgentTimelineDirection = FetchAgentTimelinePayload["direction"];
 export type FetchAgentTimelineProjection = FetchAgentTimelinePayload["projection"];
@@ -3753,6 +3755,28 @@ export class DaemonClient {
       throw new Error(payload.error);
     }
 
+    return payload;
+  }
+
+  // PATCH(native-fork)
+  async forkAgentNatively(
+    agentId: string,
+    options: AgentForkContextOptions = {},
+  ): Promise<AgentForkNativePayload> {
+    const payload = await this.sendNamespacedCorrelatedSessionRequest<"agent.fork_native.response">(
+      {
+        requestId: options.requestId,
+        message: {
+          type: "agent.fork_native.request",
+          agentId,
+          ...(options.boundaryCursor ? { boundaryCursor: options.boundaryCursor } : {}),
+          ...(options.boundaryMessageId ? { boundaryMessageId: options.boundaryMessageId } : {}),
+        },
+      },
+    );
+    if (payload.error) {
+      throw new Error(payload.error);
+    }
     return payload;
   }
 

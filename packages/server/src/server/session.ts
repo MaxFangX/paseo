@@ -128,6 +128,7 @@ import { buildStoredAgentPayload, toAgentPayload } from "./agent/agent-projectio
 import { assertPluginTimelineDataSize } from "./agent/agent-timeline-content.js";
 import { parsePluginClientId } from "./plugins/plugin-session-identity.js";
 import { buildAgentForkContextAttachment } from "./agent/activity-curator.js";
+import { buildAgentForkNativeResponse } from "./agent/native-fork.js"; // PATCH(native-fork)
 import { buildAgentPrompt } from "./agent/prompt-attachments.js";
 import type { StructuredGenerationDaemonConfig } from "./agent/structured-generation-providers.js";
 import {
@@ -2736,6 +2737,8 @@ export class Session {
     switch (msg.type) {
       case "agent.rewind.request":
         return this.handleAgentRewindRequest(msg, source);
+      case "agent.fork_native.request": // PATCH(native-fork)
+        return this.handleAgentForkNativeRequest(msg);
       default:
         return undefined;
     }
@@ -8191,6 +8194,23 @@ export class Session {
         },
       });
     }
+  }
+
+  // PATCH(native-fork)
+  private async handleAgentForkNativeRequest(
+    msg: Extract<SessionInboundMessage, { type: "agent.fork_native.request" }>,
+  ): Promise<void> {
+    const payload = await buildAgentForkNativeResponse(
+      {
+        agentManager: this.agentManager,
+        agentStorage: this.agentStorage,
+        agentUpdates: this.agentUpdates,
+        buildAgentPayload: (agent) => this.buildAgentPayload(agent),
+        logger: this.sessionLogger,
+      },
+      msg,
+    );
+    this.emit({ type: "agent.fork_native.response", payload });
   }
 
   private async prepareAgentMessage(agentId: string, text: string): Promise<void> {
