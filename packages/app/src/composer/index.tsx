@@ -2,6 +2,7 @@ import type { ComposerTextSource } from "./text-source";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { useStore } from "zustand";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
+import { beginQueuedSendNow } from "./send-now-hold"; // PATCH(send-now-hold)
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
   View,
@@ -1942,6 +1943,14 @@ function ComposerContentImpl({
   const handleSendQueuedNow = useCallback(
     async (id: string) => {
       if (!sendAgentMessageRef.current && !onSubmitMessageRef.current) return;
+      // PATCH(send-now-hold): keep the rest of the queue from flushing during the turn swap.
+      const sendNowHold = beginQueuedSendNow({
+        serverId,
+        agentId,
+        expectsNewTurn: appSettings.sendBehavior !== "steer",
+        catchUp: () => getHostRuntimeStore().drainQueuedAgentMessage(serverId, agentId),
+      });
+      if (!sendNowHold) return;
       // Reuse the regular send path; server-side send atomically interrupts any active run.
       const result = await sendQueuedComposerMessageNow({
         agentId,
@@ -1951,11 +1960,12 @@ function ComposerContentImpl({
           submitMessage(text, queuedAttachments),
         failedToSendMessage: t("composer.errors.failedToSend"),
       });
+      sendNowHold.settle(result.status === "submitted"); // PATCH(send-now-hold)
       if (result.status === "failed") {
         setSendError(result.errorMessage);
       }
     },
-    [agentId, queueWriter, submitMessage, t],
+    [agentId, appSettings.sendBehavior, queueWriter, serverId, submitMessage, t],
   );
 
   const handleQueue = useCallback(

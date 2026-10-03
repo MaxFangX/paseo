@@ -86,6 +86,7 @@ import { projectIconCache } from "@/projects/icon-cache";
 import { nativePerformanceTrace } from "@/performance/native-trace";
 import { revokePushNotifications } from "@/push-notifications";
 import { createAppWebSocketFactory } from "./websocket-factory";
+import { isQueueDrainHeld } from "@/composer/send-now-hold"; // PATCH(send-now-hold)
 
 export type HostRuntimeConnectionStatus = "idle" | "connecting" | "online" | "offline" | "error";
 export type PairingNavigationTarget = "openProject" | "hostRoot" | "hostSettings";
@@ -2392,6 +2393,7 @@ export class HostRuntimeStore {
   drainQueuedAgentMessage(serverId: string, agentId: string): void {
     const drainKey = `${serverId}:${agentId}`;
     if (this.queuedAgentDrainInFlight.has(drainKey)) return;
+    if (isQueueDrainHeld(serverId, agentId)) return; // PATCH(send-now-hold)
     const store = useSessionStore.getState();
     const session = store.sessions[serverId];
     const queue = session?.queuedMessages.get(agentId);
