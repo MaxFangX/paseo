@@ -32,6 +32,7 @@ import type { ReplicaRow, ReplicaRowStore } from "./replica-cache/row-store";
 import { subscriptionFixture } from "./subscription-fixture";
 import { readDesktopManagedLocalCredential } from "@/desktop/daemon/local-credential";
 import type { HostConfirmationRequest } from "./host-confirmation";
+import { beginQueuedSendNow } from "@/composer/send-now-hold"; // PATCH(send-now-hold)
 
 it("requests the managed connection credential through desktop main without a web hint", async () => {
   const requests: string[] = [];
@@ -4286,5 +4287,51 @@ describe("HostRuntimeStore initial connection hint bootstrap", () => {
 
     expect(seenProbes).not.toContainEqual(expect.objectContaining({ endpoint: "metro-host:8081" }));
     expect(store.getHosts()).toHaveLength(0);
+  });
+});
+
+// PATCH(send-now-hold): a send-now in flight holds the rest of the agent's queue.
+describe("send-now hold", () => {
+  it("holds the queue drain until the send-now settles", async () => {
+    const host = makeHost({ serverId: "srv_send_now_hold" });
+    const fakeClient = new FakeDaemonClient();
+    const store = new HostRuntimeStore({
+      deps: {
+        createClient: () => fakeClient as unknown as DaemonClient,
+        connectToDaemon: async () => ({
+          client: fakeClient as unknown as DaemonClient,
+          serverId: host.serverId,
+          hostname: null,
+        }),
+        getClientId: async () => "cid_send_now_hold",
+      },
+    });
+    const sessionStore = useSessionStore.getState();
+    sessionStore.initializeSession(host.serverId, fakeClient as unknown as DaemonClient, 1);
+    sessionStore.setQueuedMessages(
+      host.serverId,
+      new Map([["agent", [{ id: "next", text: "wait your turn", attachments: [] }]]]),
+    );
+    const hold = beginQueuedSendNow({
+      serverId: host.serverId,
+      agentId: "agent",
+      expectsNewTurn: true,
+      catchUp: () => store.drainQueuedAgentMessage(host.serverId, "agent"),
+    });
+
+    // The old turn closing mid-swap wakes the drain; the hold keeps the next message queued.
+    store.drainQueuedAgentMessage(host.serverId, "agent");
+    expect(
+      useSessionStore
+        .getState()
+        .sessions[host.serverId]?.queuedMessages.get("agent")
+        ?.map((message) => message.id),
+    ).toEqual(["next"]);
+
+    // A failed send releases the hold, and the idle agent drains its queue.
+    hold!.settle(false);
+    await fakeClient.waitForSentMessages(1);
+    expect(fakeClient.sentAgentMessages).toHaveLength(1);
+    useSessionStore.getState().clearSession(host.serverId);
   });
 });
