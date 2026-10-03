@@ -86,6 +86,7 @@ import {
   type CodexAppServerTraceContext,
 } from "./codex/app-server-transport.js";
 import { type CodexUserMessageTurnIndex, revertCodexConversation } from "./codex/rewind.js";
+import { forkCodexConversation } from "./codex/native-fork.js"; // PATCH(native-fork)
 import {
   materializeProviderImage,
   renderProviderImageOutputAsAssistantMarkdown,
@@ -4848,6 +4849,45 @@ export class CodexAppServerAgentSession implements AgentSession {
         this.reconcileAsyncQuestionsAfterRewind();
       },
     });
+  }
+
+  // PATCH(native-fork): a copy forked in this process would stay loaded here, and its rollout
+  // writer would block the new agent's own app-server from resuming it. So fork in a throwaway
+  // app-server, as archiveNativeSession does.
+  async forkConversation(input: { userMessageId: string }): Promise<AgentPersistenceHandle> {
+    await this.connect();
+    const persistence = this.describePersistence();
+    if (!persistence) {
+      throw new Error("Codex thread is not ready for forking");
+    }
+
+    const child = await this.spawnAppServer();
+    const client = new CodexAppServerClient(child, this.logger, () => this.traceContext());
+    try {
+      await client.request("initialize", buildCodexAppServerInitializeParams());
+      client.notify("initialized", {});
+      const threadId = await forkCodexConversation({
+        client,
+        threadId: persistence.sessionId,
+        cwd: this.config.cwd ?? null,
+        model: this.config.model ?? null,
+        serviceTier: this.serviceTier,
+        config: this.buildCodexInnerConfig(),
+        userMessageTurns: this.codexUserMessageTurns(),
+        userMessageIds: this.userMessageTurnIds,
+        userMessageId: input.userMessageId,
+      });
+      // Pending questions stay with the source; some belong to turns the copy drops.
+      const { asyncQuestions: _sourceQuestions, ...metadata } = persistence.metadata;
+      return {
+        ...persistence,
+        sessionId: threadId,
+        nativeHandle: threadId,
+        metadata: { ...metadata, threadId },
+      };
+    } finally {
+      await client.dispose();
+    }
   }
 
   async interrupt(): Promise<void> {

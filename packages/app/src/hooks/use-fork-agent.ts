@@ -9,6 +9,7 @@ import type { AssistantForkTarget } from "@/components/assistant-fork-menu";
 import type { ToastApi } from "@/components/toast-host";
 import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
 import { useStableEvent } from "@/hooks/use-stable-event";
+import { tryForkAgentNatively } from "@/hooks/native-fork"; // PATCH(native-fork)
 import { useHostFeature } from "@/runtime/host-features";
 import { generateDraftId } from "@/stores/draft-keys";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
@@ -140,6 +141,12 @@ export function useForkAgent(
       }
       if (!client) {
         throw new Error(t("workspace.terminal.hostDisconnected"));
+      }
+      // PATCH(native-fork): forks the provider session itself when it can; else the attachment.
+      if (
+        await tryForkAgentNatively({ client, serverId, agentId, workspaceId, target, boundary })
+      ) {
+        return;
       }
       const draftSetup = buildForkDraftSetup(agent);
       const prepareForkDraft = async () => {
