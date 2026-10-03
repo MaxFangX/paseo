@@ -82,6 +82,7 @@ import {
   revertClaudeFiles,
   type ClaudeRewindSdk,
 } from "./rewind.js";
+import { forkClaudeConversation } from "./native-fork.js"; // PATCH(native-fork)
 import { normalizeProviderReplayTimestamp } from "../../provider-history-timestamps.js";
 import { claudeConfigDir, claudeProjectDirSync } from "./project-dir.js";
 import { THINKING_APPLIES_NEXT_TURN_NOTICE } from "../../provider-notices.js";
@@ -2785,6 +2786,21 @@ class ClaudeAgentSession implements AgentSession {
         this.rebindConversationSession(sessionId);
       },
     });
+  }
+
+  // PATCH(native-fork)
+  async forkConversation(input: { userMessageId: string }): Promise<AgentPersistenceHandle> {
+    const persistence = this.describePersistence();
+    if (!persistence) {
+      throw new Error("Claude session is not ready for forking");
+    }
+    const fork = await forkClaudeConversation({
+      sdk: this.rewindSdk,
+      sessionId: persistence.sessionId,
+      turnAnchors: this.rewindTurnAnchors,
+      userMessageId: this.resolveClaudeMessageId(input.userMessageId),
+    });
+    return { ...persistence, sessionId: fork.sessionId, nativeHandle: fork.sessionId };
   }
 
   async revertFiles(input: { messageId: string }): Promise<void> {
