@@ -100,6 +100,7 @@ import {
   getWorkspaceNamingAttachments,
   remapDraftCwdToWorkspace,
 } from "./new-workspace-fork-context";
+import { resolveAgentForkSource } from "./new-workspace-native-fork"; // PATCH(native-fork)
 import {
   createAgentInOpenWorkspace,
   preferOpenWorkspace,
@@ -987,6 +988,7 @@ async function createWorkspaceChatAgent(input: CreateChatAgentInput): Promise<Su
     clientMessageId: `${input.draftId}:initial-message`,
     images: images?.length ? images : undefined,
     attachments: wirePayload.attachments?.length ? wirePayload.attachments : undefined,
+    forkFrom: resolveAgentForkSource({ serverId, attachments }), // PATCH(native-fork)
   };
   // PATCH(workspace-reuse): shared by a creation's workspace_ready event and the reuse path.
   const openDraftIn = (workspace: WorkspaceDescriptor) => {

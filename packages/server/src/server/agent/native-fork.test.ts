@@ -2,18 +2,26 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { AgentSnapshotPayload } from "@getpaseo/protocol/messages";
+import type { AgentSnapshotPayload, CreateAgentRequestMessage } from "@getpaseo/protocol/messages";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { createTestLogger } from "../../test-utils/test-logger.js";
 import type { ManagedAgent } from "./agent-manager.js";
-import type { AgentPersistenceHandle, AgentSession, AgentTimelineItem } from "./agent-sdk-types.js";
+import type {
+  AgentPersistenceHandle,
+  AgentSession,
+  AgentTimelineItem,
+  ForkConversationInput,
+} from "./agent-sdk-types.js";
 import { AgentStorage } from "./agent-storage.js";
 import type { AgentTimelineRow } from "./agent-timeline-store-types.js";
 import {
   buildAgentForkNativeResponse,
+  buildForkedAgentPrompt,
+  createForkedAgent,
   forkAgentNatively,
   resolveForkTurnUserMessageId,
+  type CreateForkedAgentDeps,
   type NativeForkAgentManager,
   type NativeForkDeps,
 } from "./native-fork.js";
@@ -55,7 +63,7 @@ function twoTurnRows(): AgentTimelineRow[] {
 }
 
 function makeSession(
-  forks: Array<{ userMessageId: string }>,
+  forks: ForkConversationInput[],
   options: { forkable?: boolean } = {},
 ): AgentSession {
   const unused = () => {
@@ -81,7 +89,7 @@ function makeSession(
     ...(options.forkable === false
       ? {}
       : {
-          forkConversation: async (input: { userMessageId: string }) => {
+          forkConversation: async (input: ForkConversationInput) => {
             forks.push(input);
             return FORKED_HANDLE;
           },
@@ -162,7 +170,12 @@ function snapshotPayload(agent: ManagedAgent): AgentSnapshotPayload {
 
 interface Harness {
   deps: NativeForkDeps;
-  resumes: Array<{ handle: AgentPersistenceHandle; workspaceId: string | undefined }>;
+  resumes: Array<{
+    handle: AgentPersistenceHandle;
+    overrides: unknown;
+    agentId: string | undefined;
+    workspaceId: string | undefined;
+  }>;
   hydrated: string[];
   forwarded: string[];
 }
@@ -188,11 +201,11 @@ function makeHarness(input: {
     },
     resumeAgentFromPersistence: async (
       handle: AgentPersistenceHandle,
-      _overrides?: unknown,
-      _agentId?: string,
+      overrides?: unknown,
+      agentId?: string,
       options?: { workspaceId?: string },
     ) => {
-      resumes.push({ handle, workspaceId: options?.workspaceId });
+      resumes.push({ handle, overrides, agentId, workspaceId: options?.workspaceId });
       return forked;
     },
     hasInFlightRun: () => input.inFlight ?? false,
@@ -303,9 +316,53 @@ describe("forkAgentNatively", () => {
 
     expect(snapshot?.id).toBe("forked-agent");
     expect(forks).toEqual([{ userMessageId: "provider-user-1" }]);
-    expect(harness.resumes).toEqual([{ handle: FORKED_HANDLE, workspaceId: "ws-1" }]);
+    expect(harness.resumes).toEqual([
+      { handle: FORKED_HANDLE, overrides: undefined, agentId: undefined, workspaceId: "ws-1" },
+    ]);
     expect(harness.hydrated).toEqual(["forked-agent"]);
     expect(harness.forwarded).toEqual(["forked-agent"]);
+  });
+
+  test("places the fork in the target workspace and directory under its config and id", async () => {
+    const forks: ForkConversationInput[] = [];
+    const agent = makeAgent({ id: "source", session: makeSession(forks), workspaceId: "ws-1" });
+    const harness = makeHarness({ agent });
+
+    await forkAgentNatively({
+      agentId: "source",
+      boundary: { boundaryMessageId: "msg-1" },
+      deps: harness.deps,
+      target: {
+        workspaceId: "ws-2",
+        config: { provider: "claude", cwd: "/tmp/elsewhere", model: "haiku", modeId: undefined },
+      },
+      forkedAgentId: "chosen-id",
+    });
+
+    expect(forks).toEqual([{ userMessageId: "provider-user-1", cwd: "/tmp/elsewhere" }]);
+    // Only what the target sets overrides the source's config; the provider never does.
+    expect(harness.resumes).toEqual([
+      {
+        handle: FORKED_HANDLE,
+        overrides: { cwd: "/tmp/elsewhere", model: "haiku" },
+        agentId: "chosen-id",
+        workspaceId: "ws-2",
+      },
+    ]);
+  });
+
+  test("declines a target on another provider", async () => {
+    const harness = makeHarness({ agent: makeAgent({ id: "source", session: makeSession([]) }) });
+
+    await expect(
+      forkAgentNatively({
+        agentId: "source",
+        boundary: { boundaryMessageId: "msg-1" },
+        deps: harness.deps,
+        target: { workspaceId: "ws-2", config: { provider: "codex", cwd: "/tmp/elsewhere" } },
+      }),
+    ).resolves.toBeNull();
+    expect(harness.resumes).toEqual([]);
   });
 
   test("declines an in-flight fork (no boundary)", async () => {
@@ -340,6 +397,150 @@ describe("forkAgentNatively", () => {
         deps: makeHarness({ agent, inFlight: true }).deps,
       }),
     ).resolves.toBeNull();
+  });
+});
+
+const chatHistory = {
+  type: "text" as const,
+  mimeType: "text/plain" as const,
+  contextKind: "chat_history",
+  title: "Chat history",
+  text: "<chat-history-summary>...</chat-history-summary>",
+};
+
+describe("buildForkedAgentPrompt", () => {
+  test("drops the chat-history attachment the copy already embodies", () => {
+    expect(buildForkedAgentPrompt({ initialPrompt: "continue", attachments: [chatHistory] })).toBe(
+      "continue",
+    );
+  });
+
+  test("keeps other attachments and images", () => {
+    const image = { data: "aGk=", mimeType: "image/png" };
+    const note = { ...chatHistory, contextKind: "note", title: "Note", text: "keep me" };
+    const prompt = buildForkedAgentPrompt({
+      initialPrompt: "look",
+      images: [image],
+      attachments: [chatHistory, note],
+    });
+    expect(Array.isArray(prompt)).toBe(true);
+    expect(prompt).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "text", text: "keep me" }),
+        expect.objectContaining({ type: "image", data: "aGk=" }),
+      ]),
+    );
+    expect(JSON.stringify(prompt)).not.toContain("chat-history-summary");
+  });
+
+  test("is null when only the chat history was sent", () => {
+    expect(buildForkedAgentPrompt({ initialPrompt: "  ", attachments: [chatHistory] })).toBeNull();
+    expect(buildForkedAgentPrompt({})).toBeNull();
+  });
+});
+
+describe("createForkedAgent", () => {
+  interface CreateHarness {
+    deps: CreateForkedAgentDeps;
+    harness: Harness;
+    events: string[];
+    prompts: Array<{ agentId: string; prompt: unknown; clientMessageId: string | undefined }>;
+  }
+
+  function makeCreateHarness(input: {
+    agent: ManagedAgent;
+    directoryExists?: boolean;
+  }): CreateHarness {
+    const harness = makeHarness({ agent: input.agent });
+    const events: string[] = [];
+    const prompts: CreateHarness["prompts"] = [];
+    return {
+      harness,
+      events,
+      prompts,
+      deps: {
+        ...harness.deps,
+        buildAgentPayload: async (agent) => snapshotPayload(agent),
+        isDirectory: async () => input.directoryExists ?? true,
+        startInitialPrompt: async ({ agent, prompt, clientMessageId }) => {
+          events.push("prompt");
+          prompts.push({ agentId: agent.id, prompt, clientMessageId });
+          return agent;
+        },
+      },
+    };
+  }
+
+  function request(overrides: Partial<CreateAgentRequestMessage> = {}): CreateAgentRequestMessage {
+    return {
+      type: "create_agent_request",
+      requestId: "req-1",
+      config: { provider: "claude", cwd: "/tmp/elsewhere" },
+      workspaceId: "ws-2",
+      labels: {},
+      initialPrompt: "continue",
+      clientMessageId: "draft-1:initial-message",
+      attachments: [chatHistory],
+      forkFrom: { agentId: "source", boundaryMessageId: "msg-1" },
+      ...overrides,
+    };
+  }
+
+  test("forks into the request's workspace under its id, then prompts without the attachment", async () => {
+    const forks: ForkConversationInput[] = [];
+    const agent = makeAgent({ id: "source", session: makeSession(forks), workspaceId: "ws-1" });
+    const created = makeCreateHarness({ agent });
+
+    const payload = await createForkedAgent({
+      deps: created.deps,
+      request: request(),
+      agentId: "chosen-id",
+      onReady: async () => {
+        created.events.push("ready");
+      },
+    });
+
+    expect(payload?.id).toBe("forked-agent");
+    expect(forks).toEqual([{ userMessageId: "provider-user-1", cwd: "/tmp/elsewhere" }]);
+    expect(created.harness.resumes).toMatchObject([{ agentId: "chosen-id", workspaceId: "ws-2" }]);
+    expect(created.events).toEqual(["ready", "prompt"]);
+    expect(created.prompts).toEqual([
+      { agentId: "forked-agent", prompt: "continue", clientMessageId: "draft-1:initial-message" },
+    ]);
+  });
+
+  test("declines a request without a source, a workspace, or an existing directory", async () => {
+    const agent = makeAgent({ id: "source", session: makeSession([]) });
+
+    await expect(
+      createForkedAgent({
+        deps: makeCreateHarness({ agent }).deps,
+        request: request({ forkFrom: undefined }),
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      createForkedAgent({
+        deps: makeCreateHarness({ agent }).deps,
+        request: request({ workspaceId: undefined }),
+      }),
+    ).resolves.toBeNull();
+    const missing = makeCreateHarness({ agent, directoryExists: false });
+    await expect(createForkedAgent({ deps: missing.deps, request: request() })).resolves.toBeNull();
+    expect(missing.harness.resumes).toEqual([]);
+  });
+
+  test("falls back when the fork fails before an agent is registered", async () => {
+    const agent = makeAgent({ id: "source", session: makeSession([]) });
+    const created = makeCreateHarness({ agent });
+
+    await expect(
+      createForkedAgent({
+        deps: created.deps,
+        request: request({ forkFrom: { agentId: "source", boundaryMessageId: "msg-gone" } }),
+      }),
+    ).resolves.toBeNull();
+    expect(created.harness.resumes).toEqual([]);
+    expect(created.prompts).toEqual([]);
   });
 });
 
