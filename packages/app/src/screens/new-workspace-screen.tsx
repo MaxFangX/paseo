@@ -101,6 +101,11 @@ import {
   remapDraftCwdToWorkspace,
 } from "./new-workspace-fork-context";
 import {
+  createAgentInOpenWorkspace,
+  preferOpenWorkspace,
+  useOpenWorkspaceForCheckout,
+} from "./new-workspace-reuse"; // PATCH(workspace-reuse)
+import {
   buildPickerOptionData,
   defaultBasePickerItem,
   pickerItemLabel,
@@ -860,6 +865,7 @@ interface CreateChatAgentInput {
   payload: MessagePayload;
   composerState: ReturnType<typeof useAgentInputDraft>["composerState"];
   forkDraftSetup?: PendingWorkspaceDraftSetup | null;
+  reuseWorkspace?: WorkspaceDescriptor | null; // PATCH(workspace-reuse)
   ensureWorkspace: (input: {
     cwd: string;
     prompt: string;
@@ -980,48 +986,58 @@ async function createWorkspaceChatAgent(input: CreateChatAgentInput): Promise<Su
     images: images?.length ? images : undefined,
     attachments: wirePayload.attachments?.length ? wirePayload.attachments : undefined,
   };
-  const execute = async (requestedAgent = initialAgent): Promise<AgentSnapshotPayload> => {
-    const { agent } = await ensureWorkspace({
-      cwd,
-      prompt: text,
-      attachments: workspaceNamingAttachments,
-      withInitialAgent: true,
-      agent: requestedAgent,
-      onEvent: (snapshot) => {
-        if (!snapshot.workspace || navigated) return;
-        navigated = true;
-        if (!input.isStillOnCreateScreen()) return;
-        const workspace = normalizeWorkspaceDescriptor(snapshot.workspace);
-        getHostRuntimeStore().acceptWorkspaceSnapshots(serverId, [
-          { ...workspace, status: "running" },
-        ]);
-        const initialSetup = buildWorkspaceDraftSetupForCreatedWorkspace({
-          forkDraftSetup: input.forkDraftSetup,
-          workspaceDirectory: workspace.workspaceDirectory,
-          provider,
-          composerState,
-        });
-        outcome = submitWorkspaceDraft({
-          clearConsumedDraft,
-          draftKey: input.draftKey,
-          draftContextScopeKey: input.draftContextScopeKey,
-          resolveClient: input.resolveClient,
-          isStillOnCreateScreen: input.isStillOnCreateScreen,
-          serverId,
-          clearDraft,
-          draftId: input.draftId,
-          initialSetup,
-          workspaceId: workspace.id,
-          workspaceDirectory: workspace.workspaceDirectory,
-          text,
-          attachments,
-          provider,
-          composerState,
-          supportsForgeSearch: input.supportsForgeSearch,
-          agentCreation,
-        });
-      },
+  // PATCH(workspace-reuse): shared by a creation's workspace_ready event and the reuse path.
+  const openDraftIn = (workspace: WorkspaceDescriptor) => {
+    if (navigated) return;
+    navigated = true;
+    if (!input.isStillOnCreateScreen()) return;
+    getHostRuntimeStore().acceptWorkspaceSnapshots(serverId, [{ ...workspace, status: "running" }]);
+    const initialSetup = buildWorkspaceDraftSetupForCreatedWorkspace({
+      forkDraftSetup: input.forkDraftSetup,
+      workspaceDirectory: workspace.workspaceDirectory,
+      provider,
+      composerState,
     });
+    outcome = submitWorkspaceDraft({
+      clearConsumedDraft,
+      draftKey: input.draftKey,
+      draftContextScopeKey: input.draftContextScopeKey,
+      resolveClient: input.resolveClient,
+      isStillOnCreateScreen: input.isStillOnCreateScreen,
+      serverId,
+      clearDraft,
+      draftId: input.draftId,
+      initialSetup,
+      workspaceId: workspace.id,
+      workspaceDirectory: workspace.workspaceDirectory,
+      text,
+      attachments,
+      provider,
+      composerState,
+      supportsForgeSearch: input.supportsForgeSearch,
+      agentCreation,
+    });
+  };
+  const execute = async (requestedAgent = initialAgent): Promise<AgentSnapshotPayload> => {
+    // PATCH(workspace-reuse): the checkout is already open, so its workspace takes the agent.
+    const { agent } = input.reuseWorkspace
+      ? await createAgentInOpenWorkspace({
+          client: input.resolveClient(),
+          workspace: input.reuseWorkspace,
+          agent: requestedAgent,
+          idempotencyKey: input.draftId ?? generateDraftId(),
+          openDraft: openDraftIn,
+        })
+      : await ensureWorkspace({
+          cwd,
+          prompt: text,
+          attachments: workspaceNamingAttachments,
+          withInitialAgent: true,
+          agent: requestedAgent,
+          onEvent: (snapshot) => {
+            if (snapshot.workspace) openDraftIn(normalizeWorkspaceDescriptor(snapshot.workspace));
+          },
+        });
     if (!agent) throw new Error("Workspace creation returned no agent");
     return agent;
   };
@@ -1819,6 +1835,14 @@ export function NewWorkspaceScreen({
       supportsMultiplicity: supportsWorkspaceMultiplicity,
       worktreeSupport,
     });
+  // PATCH(workspace-reuse)
+  const reuseWorkspace = useOpenWorkspaceForCheckout({
+    serverId: selectedServerId,
+    project: selectedProject,
+    directory: selectedSourceDirectory,
+    isolation: effectiveIsolation,
+    canCreateWorktree,
+  });
 
   const branchSuggestionsQuery = useQuery({
     queryKey: [
@@ -2113,7 +2137,11 @@ export function NewWorkspaceScreen({
           let outcome: SubmitOutcome = "background";
           await runCreateEmptyWorkspace({
             payload,
-            ensureWorkspace: async (request) => (await ensureWorkspace(request)).workspace,
+            // PATCH(workspace-reuse)
+            ensureWorkspace: preferOpenWorkspace(
+              reuseWorkspace,
+              async (request) => (await ensureWorkspace(request)).workspace,
+            ),
             serverId: selectedServerId,
             navigate: (targetServerId, workspaceId) => {
               if (!isStillOnCreateScreen()) {
@@ -2136,6 +2164,7 @@ export function NewWorkspaceScreen({
           payload,
           composerState,
           forkDraftSetup,
+          reuseWorkspace, // PATCH(workspace-reuse)
           ensureWorkspace,
           serverId: selectedServerId,
           clearDraft: chatDraft.clear,
@@ -2170,6 +2199,7 @@ export function NewWorkspaceScreen({
       forkDraftSetup,
       isStillOnCreateScreen,
       launchTarget,
+      reuseWorkspace, // PATCH(workspace-reuse)
       selectedServerId,
       supportsForgeSearch,
       t,
