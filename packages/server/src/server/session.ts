@@ -58,6 +58,7 @@ import {
 import { ensureAgentLoaded, ensureUnarchivedAgentLoaded } from "./agent/agent-loading.js";
 import {
   sendPromptToAgent,
+  startCreatedAgentInitialPrompt, // PATCH(native-fork)
   waitForAgentRunStartWithTimeout,
   unarchiveAgentState,
 } from "./agent/agent-prompt.js";
@@ -126,7 +127,11 @@ import {
 import { assertPluginTimelineDataSize } from "./agent/agent-timeline-content.js";
 import { parsePluginClientId } from "./plugins/plugin-session-identity.js";
 import { buildAgentForkContextAttachment } from "./agent/activity-curator.js";
-import { buildAgentForkNativeResponse } from "./agent/native-fork.js"; // PATCH(native-fork)
+import {
+  buildAgentForkNativeResponse,
+  createForkedAgent,
+  type NativeForkDeps,
+} from "./agent/native-fork.js"; // PATCH(native-fork)
 import { buildAgentPrompt } from "./agent/prompt-attachments.js";
 import type { StructuredGenerationDaemonConfig } from "./agent/structured-generation-providers.js";
 import {
@@ -4230,6 +4235,30 @@ export class Session {
       }`,
     );
 
+    // PATCH(native-fork): a forkable source yields a fork in place of a fresh agent.
+    const forked = await createForkedAgent({
+      deps: {
+        ...this.nativeForkDeps(),
+        buildAgentPayload: (agent) => this.buildAgentPayload(agent),
+        isDirectory: (path) => this.filesystem.isDirectory(path),
+        startInitialPrompt: (start) =>
+          startCreatedAgentInitialPrompt({
+            agentManager: this.agentManager,
+            agentId: start.agent.id,
+            snapshot: start.agent,
+            prompt: start.prompt,
+            runOptions: start.clientMessageId
+              ? { clientMessageId: start.clientMessageId }
+              : undefined,
+            logger: this.sessionLogger,
+          }),
+      },
+      request: msg,
+      agentId,
+      onReady: onAgentReady,
+    });
+    if (forked) return forked;
+
     let createdWorktreeForCleanup: CreatePaseoWorktreeWorkflowResult | null = null;
     let createdAgentId: string | null = null;
     try {
@@ -8040,16 +8069,20 @@ export class Session {
     msg: Extract<SessionInboundMessage, { type: "agent.fork_native.request" }>,
   ): Promise<void> {
     const payload = await buildAgentForkNativeResponse(
-      {
-        agentManager: this.agentManager,
-        agentStorage: this.agentStorage,
-        agentUpdates: this.agentUpdates,
-        buildAgentPayload: (agent) => this.buildAgentPayload(agent),
-        logger: this.sessionLogger,
-      },
+      { ...this.nativeForkDeps(), buildAgentPayload: (agent) => this.buildAgentPayload(agent) },
       msg,
     );
     this.emit({ type: "agent.fork_native.response", payload });
+  }
+
+  // PATCH(native-fork)
+  private nativeForkDeps(): NativeForkDeps {
+    return {
+      agentManager: this.agentManager,
+      agentStorage: this.agentStorage,
+      agentUpdates: this.agentUpdates,
+      logger: this.sessionLogger,
+    };
   }
 
   private async prepareAgentMessage(agentId: string, text: string): Promise<void> {

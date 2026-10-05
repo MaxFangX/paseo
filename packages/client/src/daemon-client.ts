@@ -44,6 +44,7 @@ import type {
   FetchAgentTimelineResponseMessage,
   AgentForkContextResponseMessage,
   AgentForkNativeResponseMessage, // PATCH(native-fork)
+  AgentForkSource, // PATCH(native-fork)
   GitSetupOptions,
   CheckoutStatusResponse,
   CheckoutCommit,
@@ -465,6 +466,7 @@ export interface CreateAgentRequestOptions extends AgentConfigOverrides {
   worktreeName?: string;
   requestId?: string;
   labels?: Record<string, string>;
+  forkFrom?: AgentForkSource; // PATCH(native-fork)
 }
 
 export interface CreateWorkspaceRequestOptions {
@@ -6921,6 +6923,7 @@ function resolveAgentConfig(options: CreateAgentRequestOptions): AgentSessionCon
     worktreeName: _worktreeName,
     requestId: _requestId,
     labels: _labels,
+    forkFrom: _forkFrom, // PATCH(native-fork)
     ...overrides
   } = options;
 

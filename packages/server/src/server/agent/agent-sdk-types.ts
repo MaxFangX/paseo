@@ -180,6 +180,13 @@ export interface AgentCapabilityFlags {
   supportsRewindBoth?: boolean;
 }
 
+// PATCH(native-fork)
+export interface ForkConversationInput {
+  userMessageId: string;
+  /** Where the fork works; beside the source when omitted. */
+  cwd?: string;
+}
+
 export interface AgentPersistenceHandle {
   provider: AgentProvider;
   sessionId: string;
@@ -687,7 +694,7 @@ export interface AgentSession {
   revertBoth?(input: { messageId: string }): Promise<void>;
   // PATCH(native-fork): copies the session through the turn opened by `userMessageId` into a
   // new, independently resumable session and returns its persistence handle.
-  forkConversation?(input: { userMessageId: string }): Promise<AgentPersistenceHandle>;
+  forkConversation?(input: ForkConversationInput): Promise<AgentPersistenceHandle>;
   /**
    * Out-of-band prompt handler. When non-null, the manager runs the returned
    * handler instead of allocating a turn. The handler emits stream events

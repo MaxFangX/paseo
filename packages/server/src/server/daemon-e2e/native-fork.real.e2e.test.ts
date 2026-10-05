@@ -1,11 +1,11 @@
 // PATCH(native-fork): fork-only module.
 //
-// Real-provider proof that a native fork keeps what the source learned. Claude learns a secret
-// through a tool, whose result the fork-context attachment would drop. Codex's tool host does
-// not launch under this harness, so Codex is told the secret instead. Uses the locally
-// logged-in `claude` and `codex` CLIs rather than the shared OpenRouter harness, which this
-// machine has no key for.
-import { writeFile } from "node:fs/promises";
+// Real-provider proof that a native fork keeps what the source learned, beside the source and
+// in another workspace. Claude learns a secret through a tool, whose result the fork-context
+// attachment would drop. Codex's tool host does not launch under this harness, so Codex is
+// told the secret instead. Uses the locally logged-in `claude` and `codex` CLIs rather than
+// the shared OpenRouter harness, which this machine has no key for.
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import pino from "pino";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vitest";
@@ -69,6 +69,26 @@ const TURN_TWO_PROMPT = "PASEO_NF_T2. Reply exactly: PASEO_NF_T2_DONE";
 const RECALL_PROMPT =
   "PASEO_NF_RECALL. Without reading any files or running any tools, what was the secret code " +
   "from earlier in this conversation? Reply with only the code.";
+
+/** Recalls the secret into a file in the copy's own directory, or in words. */
+function forkPrompt(learnsByTool: boolean): string {
+  return learnsByTool
+    ? [
+        "PASEO_NF_FORK. Without reading any files, create the file fork.txt in the current",
+        `directory containing exactly the secret code from earlier in this conversation.`,
+        "When the file is saved, reply exactly: PASEO_NF_FORK_DONE",
+      ].join(" ")
+    : RECALL_PROMPT;
+}
+
+/** What the attachment flow would have sent; a native fork must not restate it. */
+const STALE_CHAT_HISTORY = {
+  type: "text" as const,
+  mimeType: "text/plain" as const,
+  contextKind: "chat_history",
+  title: "Chat history",
+  text: "<chat-history-summary>PASEO_NF_STALE</chat-history-summary>",
+};
 
 async function sendTurn(harness: Harness, agentId: string, prompt: string): Promise<void> {
   await harness.client.sendMessage(agentId, prompt);
@@ -198,6 +218,74 @@ describe.each(PROVIDERS)("daemon E2E (real $provider) - native fork", (spec) => 
       expect(userTexts(wholeItems)).toEqual([turnOnePrompt(spec.learnsByTool), TURN_TWO_PROMPT]);
     } finally {
       closeRewindSession({ agentId: source.id, cwd });
+    }
+  }, 600_000);
+
+  test("forks into another workspace and directory through workspace.create", async () => {
+    const sourceCwd = tmpRewindCwd(`daemon-real-${spec.provider}-native-fork-src-`);
+    const targetCwd = tmpRewindCwd(`daemon-real-${spec.provider}-native-fork-dst-`);
+    const source = await harness.client.createAgent({
+      cwd: sourceCwd,
+      title: `${spec.provider}-native-fork-source`,
+      provider: spec.provider,
+      ...spec.config,
+    });
+    let forkedId: string | null = null;
+
+    try {
+      await sendTurn(harness, source.id, turnOnePrompt(spec.learnsByTool));
+      const sourceItems = await fetchTimelineItems(harness.client, source.id);
+      const sourceSessionId = (await harness.client.fetchAgent({ agentId: source.id }))?.agent
+        .persistence?.sessionId;
+      expectSessionId(sourceSessionId);
+
+      const created = await harness.client.createWorkspace({
+        source: { kind: "directory", path: targetCwd },
+        idempotencyKey: `native-fork-${spec.provider}-${Date.now()}`,
+        agent: {
+          config: { provider: spec.provider, cwd: targetCwd, ...spec.config },
+          initialPrompt: forkPrompt(spec.learnsByTool),
+          clientMessageId: `native-fork-${Date.now()}`,
+          attachments: [STALE_CHAT_HISTORY],
+          forkFrom: {
+            agentId: source.id,
+            boundaryMessageId: assistantMessageIdOfTurn(sourceItems, "PASEO_NF_T1"),
+          },
+        },
+      });
+      expect(created.error).toBeNull();
+      const forked = created.agent;
+      if (!forked) throw new Error("workspace.create returned no agent");
+      forkedId = forked.id;
+      expect(forked.id).not.toBe(source.id);
+      expect(forked.cwd).toBe(targetCwd);
+      expect(forked.workspaceId).toBe(created.workspace?.id);
+      expect(forked.currentModeId).toBe(spec.config.modeId);
+      expectSessionId(forked.persistence?.sessionId);
+      expect(forked.persistence?.sessionId).not.toBe(sourceSessionId);
+
+      const finish = await harness.client.waitForFinish(forked.id, TURN_TIMEOUT_MS);
+      expect(finish.status).toBe("idle");
+      expect(finish.final?.lastError).toBeUndefined();
+
+      // The copy holds the source's turn, then the prompt alone: no attachment restates it.
+      const items = await fetchTimelineItems(harness.client, forked.id);
+      expect(userTexts(items)).toEqual([
+        turnOnePrompt(spec.learnsByTool),
+        forkPrompt(spec.learnsByTool),
+      ]);
+      expect(JSON.stringify(items)).not.toContain("PASEO_NF_STALE");
+
+      // It recalls the secret and works in its own directory.
+      if (spec.learnsByTool) {
+        await expect(readFile(path.join(targetCwd, "fork.txt"), "utf8")).resolves.toContain(SECRET);
+        await expect(fileExists(path.join(sourceCwd, "fork.txt"))).resolves.toBe(false);
+      } else {
+        expect(textByRole(items, "assistant_message")).toContain(SECRET);
+      }
+    } finally {
+      closeRewindSession({ agentId: source.id, cwd: sourceCwd });
+      if (forkedId) closeRewindSession({ agentId: forkedId, cwd: targetCwd });
     }
   }, 600_000);
 });

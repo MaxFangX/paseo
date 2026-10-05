@@ -31,6 +31,27 @@ describe("native fork messages", () => {
     });
   });
 
+  it("accepts a new agent forked from a source turn, alone or as a workspace's first agent", () => {
+    const forkFrom = { agentId: "agent-1", boundaryMessageId: "msg-9" };
+    const agent = SessionInboundMessageSchema.parse({
+      type: "agent.create.request",
+      requestId: "agent-1",
+      config: { provider: "claude", cwd: "/repo" },
+      workspaceId: "wks_0123456789abcdef",
+      initialPrompt: "continue",
+      forkFrom,
+    });
+    const workspace = SessionInboundMessageSchema.parse({
+      type: "workspace.create.request",
+      requestId: "ws-1",
+      source: { kind: "directory", path: "/repo" },
+      agent: { config: { provider: "claude", cwd: "/repo" }, forkFrom },
+    });
+
+    expect(agent).toMatchObject({ type: "agent.create.request", forkFrom });
+    expect(workspace).toMatchObject({ type: "workspace.create.request", agent: { forkFrom } });
+  });
+
   it("carries a declined fork as neither agent nor error", () => {
     const response = SessionOutboundMessageSchema.parse({
       type: "agent.fork_native.response",

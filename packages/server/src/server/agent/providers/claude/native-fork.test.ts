@@ -1,7 +1,11 @@
 // PATCH(native-fork): fork-only module.
-import { describe, expect, test } from "vitest";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 
-import { forkClaudeConversation } from "./native-fork.js";
+import { forkClaudeConversation, moveClaudeTranscript } from "./native-fork.js";
+import { claudeProjectDirSync } from "./project-dir.js";
 import { FakeClaudeSdk } from "./test-rewind-claude-sdk.js";
 
 const TURN_ANCHORS = [
@@ -48,5 +52,45 @@ describe("forkClaudeConversation", () => {
         userMessageId: "user-9",
       }),
     ).rejects.toThrow(/not in the tracked conversation/);
+  });
+});
+
+describe("moveClaudeTranscript", () => {
+  let root: string;
+  let configDir: string;
+  let fromDir: string;
+  let toCwd: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(path.join(tmpdir(), "claude-fork-move-"));
+    configDir = path.join(root, "config");
+    fromDir = claudeProjectDirSync(path.join(root, "from"), { configDir });
+    toCwd = path.join(root, "to");
+    mkdirSync(fromDir, { recursive: true });
+    writeFileSync(path.join(fromDir, "fork-1.jsonl"), '{"type":"user"}\n');
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test("moves the transcript into the target cwd's project directory", async () => {
+    await moveClaudeTranscript("fork-1", { fromDir, toCwd, configDir });
+
+    const toDir = claudeProjectDirSync(toCwd, { configDir });
+    expect(readFileSync(path.join(toDir, "fork-1.jsonl"), "utf8")).toBe('{"type":"user"}\n');
+    expect(() => statSync(path.join(fromDir, "fork-1.jsonl"))).toThrow(/ENOENT/);
+  });
+
+  test("leaves a transcript that is already in place alone", async () => {
+    await moveClaudeTranscript("fork-1", { fromDir, toCwd: path.join(root, "from"), configDir });
+
+    expect(statSync(path.join(fromDir, "fork-1.jsonl")).isFile()).toBe(true);
+  });
+
+  test("reports a fork that left no transcript instead of resuming an empty one", async () => {
+    await expect(moveClaudeTranscript("fork-2", { fromDir, toCwd, configDir })).rejects.toThrow(
+      /left no transcript/,
+    );
   });
 });

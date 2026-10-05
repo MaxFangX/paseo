@@ -12,6 +12,7 @@ import {
   type AgentModelDefinition,
   type McpServerConfig,
   type AgentPersistenceHandle,
+  type ForkConversationInput, // PATCH(native-fork)
   type AgentPermissionRequest,
   type AgentPermissionResponse,
   type AgentPermissionResult,
@@ -4958,7 +4959,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   // PATCH(native-fork): a copy forked in this process would stay loaded here, and its rollout
   // writer would block the new agent's own app-server from resuming it. So fork in a throwaway
   // app-server, as archiveNativeSession does.
-  async forkConversation(input: { userMessageId: string }): Promise<AgentPersistenceHandle> {
+  async forkConversation(input: ForkConversationInput): Promise<AgentPersistenceHandle> {
     await this.connect();
     const persistence = this.describePersistence();
     if (!persistence) {
@@ -4975,7 +4976,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       const threadId = await forkCodexConversation({
         client,
         threadId: persistence.sessionId,
-        cwd: this.config.cwd ?? null,
+        cwd: input.cwd ?? this.config.cwd ?? null,
         model: this.config.model ?? null,
         serviceTier: this.serviceTier,
         config: this.buildCodexInnerConfig(),
