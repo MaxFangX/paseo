@@ -1729,6 +1729,14 @@ export const CreateAgentWorktreeTargetSchema = z.discriminatedUnion("mode", [
 
 export type CreateAgentWorktreeTarget = z.infer<typeof CreateAgentWorktreeTargetSchema>;
 
+// PATCH(native-fork): the turn a new agent is forked from. When the source can be forked
+// natively, the daemon forks its provider session into the new agent's workspace and
+// directory in place of creating a fresh agent; otherwise the agent is created as requested.
+export const AgentForkSourceSchema = z.object({
+  agentId: z.string(),
+  boundaryMessageId: z.string(),
+});
+
 export const CreateAgentRequestMessageSchema = z.object({
   type: z.literal("create_agent_request"),
   // Legacy create_agent_request uses a separate initial-message receipt when keyed.
@@ -1756,6 +1764,7 @@ export const CreateAgentRequestMessageSchema = z.object({
   // Workspace creation intent, rejected when selecting an existing workspace.
   background: z.boolean().optional(),
   labels: z.record(z.string(), z.string()).default({}),
+  forkFrom: AgentForkSourceSchema.optional(), // PATCH(native-fork)
   requestId: z.string(),
 });
 
@@ -7383,6 +7392,7 @@ export type DictationStreamChunkMessage = z.infer<typeof DictationStreamChunkMes
 export type DictationStreamFinishMessage = z.infer<typeof DictationStreamFinishMessageSchema>;
 export type DictationStreamCancelMessage = z.infer<typeof DictationStreamCancelMessageSchema>;
 export type CreateAgentRequestMessage = z.infer<typeof CreateAgentRequestMessageSchema>;
+export type AgentForkSource = z.infer<typeof AgentForkSourceSchema>; // PATCH(native-fork)
 export type AgentAttachment = z.infer<typeof AgentAttachmentSchema>;
 export type ForgeChangeRequestAttachment = z.infer<typeof ForgeChangeRequestAttachmentSchema>;
 export type ForgeIssueAttachment = z.infer<typeof ForgeIssueAttachmentSchema>;

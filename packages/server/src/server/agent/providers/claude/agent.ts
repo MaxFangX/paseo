@@ -107,6 +107,7 @@ import {
   type AgentPermissionResponse,
   type AgentPermissionUpdate,
   type AgentPersistenceHandle,
+  type ForkConversationInput, // PATCH(native-fork)
   type AgentProviderNotice,
   type AgentPromptInput,
   type AgentRunOptions,
@@ -3052,18 +3053,26 @@ class ClaudeAgentSession implements AgentSession {
   }
 
   // PATCH(native-fork)
-  async forkConversation(input: { userMessageId: string }): Promise<AgentPersistenceHandle> {
+  async forkConversation(input: ForkConversationInput): Promise<AgentPersistenceHandle> {
     const persistence = this.describePersistence();
     const transcriptPath = persistence ? this.resolveHistoryPath(persistence.sessionId) : null;
     if (!persistence || !transcriptPath) {
       throw new Error("Claude session is not ready for forking");
     }
+    // The SDK writes the fork beside the source transcript, wherever that is.
     const fork = await forkClaudeConversation({
       sdk: this.rewindSdk,
       sessionId: persistence.sessionId,
       transcriptPath,
       turnAnchors: this.rewindTurnAnchors,
       userMessageId: this.resolveClaudeMessageId(input.userMessageId),
+      move: input.cwd
+        ? {
+            fromDir: path.dirname(transcriptPath),
+            toCwd: input.cwd,
+            configDir: claudeConfigDir(this.buildSdkEnv()),
+          }
+        : undefined,
     });
     return { ...persistence, sessionId: fork.sessionId, nativeHandle: fork.sessionId };
   }
