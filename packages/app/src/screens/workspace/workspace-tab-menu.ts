@@ -57,6 +57,14 @@ export type WorkspaceTabMenuEntry =
       testID: string;
       onSelect: () => void;
     }
+  // PATCH(agent-move): rendered by the surfaces as a submenu trigger; see move-agent-menu.tsx.
+  | {
+      kind: "move-agent";
+      key: string;
+      agentId: string;
+      tabId: string;
+      testID: string;
+    }
   | {
       kind: "separator";
       key: string;
@@ -305,6 +313,16 @@ export function buildWorkspaceTabMenuEntries(
       onSelect: () => {
         void onReloadAgent(agentId);
       },
+    });
+  }
+  if (tab.target.kind === "agent") {
+    // PATCH(agent-move)
+    entries.push({
+      kind: "move-agent",
+      key: "move-agent",
+      agentId: tab.target.agentId,
+      tabId: tab.tabId,
+      testID: `${menuTestIDBase}-move-agent`,
     });
   }
   entries.push({

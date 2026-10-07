@@ -20,6 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { WorkspaceTabMenuEntry } from "@/screens/workspace/workspace-tab-menu";
+import { MoveAgentSubTrigger, useMoveAgentMenuPages } from "@/screens/workspace/move-agent-menu"; // PATCH(agent-move)
 import type { Theme } from "@/styles/theme";
 
 const ThemedEllipsis = withUnistyles(Ellipsis);
@@ -84,6 +85,18 @@ function MobileTabDropdownMenuItem({
   );
 }
 
+// PATCH(agent-move): the move row leads to a submenu rather than running an action.
+function MobileTabMenuEntryItem({
+  entry,
+}: {
+  entry: Exclude<WorkspaceTabMenuEntry, { kind: "separator" }>;
+}) {
+  if (entry.kind === "move-agent") {
+    return <MoveAgentSubTrigger entry={entry} />;
+  }
+  return <MobileTabDropdownMenuItem entry={entry} />;
+}
+
 export function MobileTabTrailingAccessory({
   menuTestIDBase,
   presentationLabel,
@@ -94,6 +107,7 @@ export function MobileTabTrailingAccessory({
   menuEntries: WorkspaceTabMenuEntry[];
 }): ReactElement {
   const { t } = useTranslation();
+  const moveAgentPages = useMoveAgentMenuPages(menuEntries); // PATCH(agent-move)
   return (
     <DropdownMenu compactMode="sheet">
       <DropdownMenuTrigger
@@ -111,12 +125,13 @@ export function MobileTabTrailingAccessory({
         width={220}
         sheetTitle={presentationLabel}
         testID={menuTestIDBase}
+        pages={moveAgentPages} // PATCH(agent-move)
       >
         {menuEntries.map((entry) =>
           entry.kind === "separator" ? (
             <DropdownMenuSeparator key={entry.key} />
           ) : (
-            <MobileTabDropdownMenuItem key={entry.key} entry={entry} />
+            <MobileTabMenuEntryItem key={entry.key} entry={entry} /> // PATCH(agent-move)
           ),
         )}
       </DropdownMenuContent>
