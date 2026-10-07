@@ -11,6 +11,7 @@ const INBOUND_PERMISSION = {
   "agent.detach.request": "workspace.write",
   "agent.fork_context.request": "workspace.read",
   "agent.fork_native.request": "workspace.write", // PATCH(native-fork)
+  "agent.move.request": "workspace.write", // PATCH(agent-move)
   "agent.provider_subagents.list.request": "workspace.read",
   "agent.provider_subagents.timeline.get.request": "workspace.read",
   "agent.rewind.request": "workspace.write",
@@ -225,6 +226,7 @@ const OUTBOUND_PERMISSION = {
   "agent.detach.response": "workspace.write",
   "agent.fork_context.response": "workspace.read",
   "agent.fork_native.response": "workspace.write", // PATCH(native-fork)
+  "agent.move.response": "workspace.write", // PATCH(agent-move)
   "agent.provider_subagents.list.response": "workspace.read",
   "agent.provider_subagents.timeline.get.response": "workspace.read",
   "agent.provider_subagents.update": "workspace.read",

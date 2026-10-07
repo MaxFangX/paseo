@@ -132,6 +132,7 @@ import {
   createForkedAgent,
   type NativeForkDeps,
 } from "./agent/native-fork.js"; // PATCH(native-fork)
+import { buildAgentMoveResponse } from "./agent/move-agent.js"; // PATCH(agent-move)
 import { buildAgentPrompt } from "./agent/prompt-attachments.js";
 import type { StructuredGenerationDaemonConfig } from "./agent/structured-generation-providers.js";
 import {
@@ -2611,6 +2612,8 @@ export class Session {
         return this.handleAgentRewindRequest(msg, source);
       case "agent.fork_native.request": // PATCH(native-fork)
         return this.handleAgentForkNativeRequest(msg);
+      case "agent.move.request": // PATCH(agent-move)
+        return this.handleAgentMoveRequest(msg);
       default:
         return undefined;
     }
@@ -8073,6 +8076,23 @@ export class Session {
       msg,
     );
     this.emit({ type: "agent.fork_native.response", payload });
+  }
+
+  // PATCH(agent-move)
+  private async handleAgentMoveRequest(
+    msg: Extract<SessionInboundMessage, { type: "agent.move.request" }>,
+  ): Promise<void> {
+    const payload = await buildAgentMoveResponse(
+      {
+        ...this.nativeForkDeps(),
+        agentManager: this.agentManager,
+        buildAgentPayload: (agent) => this.buildAgentPayload(agent),
+        getWorkspace: (workspaceId) => this.workspaceRegistry.get(workspaceId),
+        isDirectory: (path) => this.filesystem.isDirectory(path),
+      },
+      msg,
+    );
+    this.emit({ type: "agent.move.response", payload });
   }
 
   // PATCH(native-fork)

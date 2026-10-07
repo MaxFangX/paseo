@@ -645,6 +645,9 @@ export const ru: TranslationResources = {
         closeRight: "Закрыть вкладки справа",
         closeOthers: "Закрыть другие вкладки",
         moveToMain: "Переместить на основную панель",
+        moveAgent: "Переместить в рабочее пространство", // PATCH(agent-move)
+        moveAgentEmpty: "Других рабочих пространств нет", // PATCH(agent-move)
+        moveAgentFailed: "Не удалось переместить агента", // PATCH(agent-move)
         reloadAgent: "Перезагрузить агента",
         reloadAgentTooltip: "Перезагрузите агента, чтобы обновить навыки, MCP или статус входа.",
         close: "Закрыть",

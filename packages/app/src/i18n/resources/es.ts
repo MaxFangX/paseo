@@ -644,6 +644,9 @@ export const es: TranslationResources = {
         closeRight: "Cerrar pestañas a la derecha",
         closeOthers: "Cerrar otras pestañas",
         moveToMain: "Mover al panel principal",
+        moveAgent: "Mover a espacio de trabajo", // PATCH(agent-move)
+        moveAgentEmpty: "No hay otros espacios de trabajo", // PATCH(agent-move)
+        moveAgentFailed: "No se pudo mover el agente", // PATCH(agent-move)
         reloadAgent: "Recargar agente",
         reloadAgentTooltip:
           "Vuelva a cargar el agente para actualizar habilidades, MCP o estado de inicio de sesión.",

@@ -711,6 +711,26 @@ function detachedAgentLabelPatch(labels: Record<string, string>): AgentLabelPatc
   return patch;
 }
 
+// PATCH(agent-move): a reload into another cwd moves provider state bound to the old one, once
+// the old runtime has released it and before the new one looks for it.
+async function moveReloadedSession(
+  existing: Pick<ManagedAgent, "cwd"> & { session: AgentSession },
+  overrides: Partial<AgentSessionConfig> | undefined,
+): Promise<void> {
+  const cwd = overrides?.cwd;
+  if (cwd && cwd !== existing.cwd) {
+    await existing.session.moveConversation?.({ cwd });
+  }
+}
+
+// PATCH(agent-move): a reload keeps the agent's workspace unless the caller moves it.
+function reloadedWorkspaceId(
+  existing: Pick<ManagedAgent, "workspaceId">,
+  options: { workspaceId?: string } | undefined,
+): string | undefined {
+  return options?.workspaceId ?? existing.workspaceId;
+}
+
 export class AgentManager {
   private readonly pluginLifecycle: PluginLifecycle | undefined;
   private readonly clients = new Map<AgentProvider, AgentClient>();
@@ -1491,7 +1511,7 @@ export class AgentManager {
   reloadAgentSession(
     agentId: string,
     overrides?: Partial<AgentSessionConfig>,
-    options?: { rehydrateFromDisk?: boolean },
+    options?: { rehydrateFromDisk?: boolean; workspaceId?: string }, // PATCH(agent-move)
   ): Promise<ManagedAgent> {
     return this.trackAgentRegistrationOperation(
       this.runLifecycleMutation(agentId, () =>
@@ -1503,7 +1523,7 @@ export class AgentManager {
   private async reloadAgentSessionInternal(
     agentId: string,
     overrides?: Partial<AgentSessionConfig>,
-    options?: { rehydrateFromDisk?: boolean },
+    options?: { rehydrateFromDisk?: boolean; workspaceId?: string }, // PATCH(agent-move)
   ): Promise<ManagedAgent> {
     this.assertAcceptingAgentRegistrations();
     let existing = this.requireSessionAgent(agentId);
@@ -1518,6 +1538,7 @@ export class AgentManager {
     const preservedAttention = existing.attention;
     const handle = existing.persistence;
     const provider = handle?.provider ?? existing.provider;
+    const workspaceId = reloadedWorkspaceId(existing, options); // PATCH(agent-move)
     const client = this.requireClient(provider);
     const refreshConfig = {
       ...existing.config,
@@ -1536,7 +1557,7 @@ export class AgentManager {
       storedConfig.cwd,
       paseoToolPolicy,
       undefined,
-      { reason: "refresh", purpose: "interactive", workspaceId: existing.workspaceId },
+      { reason: "refresh", purpose: "interactive", workspaceId },
     );
     const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
     if (
@@ -1552,6 +1573,7 @@ export class AgentManager {
     try {
       // A persisted thread can have only one writer, even when its turn is idle.
       await this.closeReloadedSession(existing.session, agentId);
+      await moveReloadedSession(existing, overrides); // PATCH(agent-move)
       await this.drainSessionEvents(agentId);
       this.cancelRunningProviderSubagents(agentId);
       closedExisting = this.prepareAgentForClosure(existing, "agent reloaded");
@@ -1578,7 +1600,7 @@ export class AgentManager {
       handedToRegistration = true;
       return this.registerSession(session, storedConfig, agentId, {
         labels: existing.labels,
-        workspaceId: existing.workspaceId,
+        workspaceId,
         owner: existing.owner,
         createdAt: existing.createdAt,
         updatedAt: existing.updatedAt,

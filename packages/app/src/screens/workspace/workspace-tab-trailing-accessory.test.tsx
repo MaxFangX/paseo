@@ -41,6 +41,12 @@ vi.mock("lucide-react-native", () => {
   };
 });
 
+// PATCH(agent-move): the move row needs the menu engine this test replaces with stubs.
+vi.mock("@/screens/workspace/move-agent-menu", () => ({
+  MoveAgentSubTrigger: () => null,
+  useMoveAgentMenuPages: () => [],
+}));
+
 vi.mock("react-native-unistyles", () => ({
   StyleSheet: {
     create: (factory: unknown) =>

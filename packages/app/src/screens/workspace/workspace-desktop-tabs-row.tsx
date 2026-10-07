@@ -62,6 +62,7 @@ import {
   type WorkspaceTabMenuEntry,
   type WorkspaceTabMenuLabels,
 } from "@/screens/workspace/workspace-tab-menu";
+import { MoveAgentSubTrigger, useMoveAgentMenuPages } from "@/screens/workspace/move-agent-menu"; // PATCH(agent-move)
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import type { PaneHost } from "@/panels/panel-manifest";
 import type { WorkspaceTabLaunchPurpose } from "@/workspace-tabs/launcher";
@@ -453,6 +454,18 @@ function TabContextMenuItem({
   );
 }
 
+// PATCH(agent-move): the move row leads to a submenu rather than running an action.
+function TabMenuEntryItem({
+  entry,
+}: {
+  entry: Exclude<WorkspaceTabMenuEntry, { kind: "separator" }>;
+}) {
+  if (entry.kind === "move-agent") {
+    return <MoveAgentSubTrigger entry={entry} />;
+  }
+  return <TabContextMenuItem entry={entry} />;
+}
+
 function tabKeyExtractor(tab: WorkspaceDesktopTabRowItem) {
   return `${tab.tab.key}:${tab.tab.kind}`;
 }
@@ -759,6 +772,7 @@ function TabChip({
 }) {
   const { closeButtonTestId, contextMenuTestId, menuEntries } = resolvedTab;
   const { t } = useTranslation();
+  const moveAgentPages = useMoveAgentMenuPages(menuEntries); // PATCH(agent-move)
   const middleClickRef = useMiddleClickClose(
     useCallback(() => void onCloseTab(tab.tabId), [onCloseTab, tab.tabId]),
   );
@@ -937,12 +951,17 @@ function TabChip({
           </View>
         ) : null}
 
-        <ContextMenuContent align="start" width={DROPDOWN_WIDTH} testID={contextMenuTestId}>
+        <ContextMenuContent
+          align="start"
+          width={DROPDOWN_WIDTH}
+          testID={contextMenuTestId}
+          pages={moveAgentPages} // PATCH(agent-move)
+        >
           {menuEntries.map((entry) =>
             entry.kind === "separator" ? (
               <ContextMenuSeparator key={entry.key} />
             ) : (
-              <TabContextMenuItem key={entry.key} entry={entry} />
+              <TabMenuEntryItem key={entry.key} entry={entry} /> // PATCH(agent-move)
             ),
           )}
         </ContextMenuContent>

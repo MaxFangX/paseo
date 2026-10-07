@@ -82,7 +82,7 @@ import {
   revertClaudeFiles,
   type ClaudeRewindSdk,
 } from "./rewind.js";
-import { forkClaudeConversation } from "./native-fork.js"; // PATCH(native-fork)
+import { forkClaudeConversation, moveClaudeTranscript } from "./native-fork.js"; // PATCH(native-fork) PATCH(agent-move)
 import { normalizeProviderReplayTimestamp } from "../../provider-history-timestamps.js";
 import { claudeConfigDir, claudeProjectDirSync } from "./project-dir.js";
 import { THINKING_APPLIES_NEXT_TURN_NOTICE } from "../../provider-notices.js";
@@ -2812,6 +2812,21 @@ class ClaudeAgentSession implements AgentSession {
           : undefined,
     });
     return { ...persistence, sessionId: fork.sessionId, nativeHandle: fork.sessionId };
+  }
+
+  // PATCH(agent-move): Paseo reads history from the cwd's project directory, so the transcript
+  // moves with the agent. A session that has not written one yet has nothing to move.
+  async moveConversation(input: { cwd: string }): Promise<void> {
+    const persistence = this.describePersistence();
+    const transcriptPath = persistence ? this.resolveHistoryPath(persistence.sessionId) : null;
+    if (!persistence || !transcriptPath || !fs.existsSync(transcriptPath)) {
+      return;
+    }
+    await moveClaudeTranscript(persistence.sessionId, {
+      fromDir: path.dirname(transcriptPath),
+      toCwd: input.cwd,
+      configDir: claudeConfigDir(this.buildSdkEnv()),
+    });
   }
 
   async revertFiles(input: { messageId: string }): Promise<void> {

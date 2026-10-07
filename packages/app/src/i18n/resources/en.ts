@@ -635,6 +635,9 @@ export const en = {
         closeRight: "Close to the right",
         closeOthers: "Close other tabs",
         moveToMain: "Move to main panel",
+        moveAgent: "Move to workspace", // PATCH(agent-move)
+        moveAgentEmpty: "No other workspaces", // PATCH(agent-move)
+        moveAgentFailed: "Failed to move agent", // PATCH(agent-move)
         reloadAgent: "Reload agent",
         reloadAgentTooltip: "Reload agent to update skills, MCPs or login status.",
         close: "Close",

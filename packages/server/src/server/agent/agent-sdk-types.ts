@@ -695,6 +695,9 @@ export interface AgentSession {
   // PATCH(native-fork): copies the session through the turn opened by `userMessageId` into a
   // new, independently resumable session and returns its persistence handle.
   forkConversation?(input: ForkConversationInput): Promise<AgentPersistenceHandle>;
+  // PATCH(agent-move): relocates provider state that lives beside the session's cwd so the
+  // session can be resumed under `cwd`. Providers whose state is cwd-independent omit this.
+  moveConversation?(input: { cwd: string }): Promise<void>;
   /**
    * Out-of-band prompt handler. When non-null, the manager runs the returned
    * handler instead of allocating a turn. The handler emits stream events
