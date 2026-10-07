@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { FilePanelOpenWithMenu } from "@/file-panels";
 import type { WorkspaceTabMenuEntry } from "@/screens/workspace/workspace-tab-menu";
+import { MoveAgentSubTrigger, useMoveAgentMenuPages } from "@/screens/workspace/move-agent-menu"; // PATCH(agent-move)
 import type { Theme } from "@/styles/theme";
 
 const ThemedEllipsis = withUnistyles(Ellipsis);
@@ -85,6 +86,18 @@ function MobileTabDropdownMenuItem({
   );
 }
 
+// PATCH(agent-move): the move row leads to a submenu rather than running an action.
+function MobileTabMenuEntryItem({
+  entry,
+}: {
+  entry: Exclude<WorkspaceTabMenuEntry, { kind: "separator" | "file-panel-open-with" }>;
+}) {
+  if (entry.kind === "move-agent") {
+    return <MoveAgentSubTrigger entry={entry} />;
+  }
+  return <MobileTabDropdownMenuItem entry={entry} />;
+}
+
 export function MobileTabTrailingAccessory({
   menuTestIDBase,
   presentationLabel,
@@ -98,6 +111,7 @@ export function MobileTabTrailingAccessory({
   openWith?: FilePanelOpenWithMenu;
 }): ReactElement {
   const { t } = useTranslation();
+  const moveAgentPages = useMoveAgentMenuPages(menuEntries, openWith?.pages); // PATCH(agent-move)
   return (
     <DropdownMenu compactMode="sheet">
       <DropdownMenuTrigger
@@ -114,7 +128,7 @@ export function MobileTabTrailingAccessory({
         align="end"
         width={220}
         sheetTitle={presentationLabel}
-        pages={openWith?.pages}
+        pages={moveAgentPages} // PATCH(agent-move): carries openWith's pages too
         testID={menuTestIDBase}
       >
         {menuEntries.map((entry) => {
@@ -122,7 +136,7 @@ export function MobileTabTrailingAccessory({
           if (entry.kind === "file-panel-open-with") {
             return <Fragment key={entry.key}>{openWith?.trigger}</Fragment>;
           }
-          return <MobileTabDropdownMenuItem key={entry.key} entry={entry} />;
+          return <MobileTabMenuEntryItem key={entry.key} entry={entry} />; // PATCH(agent-move)
         })}
       </DropdownMenuContent>
     </DropdownMenu>

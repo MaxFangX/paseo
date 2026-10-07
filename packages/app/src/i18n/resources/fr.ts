@@ -659,6 +659,9 @@ export const fr: TranslationResources = {
         closeRight: "Fermer les onglets à droite",
         closeOthers: "Fermer les autres onglets",
         moveToMain: "Déplacer vers le panneau principal",
+        moveAgent: "Déplacer vers un espace de travail", // PATCH(agent-move)
+        moveAgentEmpty: "Aucun autre espace de travail", // PATCH(agent-move)
+        moveAgentFailed: "Impossible de déplacer l’agent", // PATCH(agent-move)
         reloadAgent: "Recharger l’agent",
         reloadAgentTooltip:
           "Rechargez l’agent pour mettre à jour les skills, les MCP ou l’état de connexion.",

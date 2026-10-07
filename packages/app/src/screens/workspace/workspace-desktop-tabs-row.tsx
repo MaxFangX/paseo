@@ -64,6 +64,7 @@ import {
   type WorkspaceTabMenuEntry,
   type WorkspaceTabMenuLabels,
 } from "@/screens/workspace/workspace-tab-menu";
+import { MoveAgentSubTrigger, useMoveAgentMenuPages } from "@/screens/workspace/move-agent-menu"; // PATCH(agent-move)
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import type { PaneHost } from "@/panels/panel-manifest";
 import type { WorkspaceTabLaunchPurpose } from "@/workspace-tabs/launcher";
@@ -459,6 +460,18 @@ function TabContextMenuItem({
   );
 }
 
+// PATCH(agent-move): the move row leads to a submenu rather than running an action.
+function TabMenuEntryItem({
+  entry,
+}: {
+  entry: Exclude<WorkspaceTabMenuEntry, { kind: "separator" | "file-panel-open-with" }>;
+}) {
+  if (entry.kind === "move-agent") {
+    return <MoveAgentSubTrigger entry={entry} />;
+  }
+  return <TabContextMenuItem entry={entry} />;
+}
+
 function tabKeyExtractor(tab: WorkspaceDesktopTabRowItem) {
   return `${tab.tab.key}:${tab.tab.kind}`;
 }
@@ -762,6 +775,7 @@ function TabChip({
     { serverId, workspaceId, tabId: tab.tabId },
     contextMenuTestId,
   );
+  const moveAgentPages = useMoveAgentMenuPages(menuEntries, openWith.pages); // PATCH(agent-move)
   const middleClickRef = useMiddleClickClose(
     useCallback(() => void onCloseTab(tab.tabId), [onCloseTab, tab.tabId]),
   );
@@ -942,7 +956,7 @@ function TabChip({
         <ContextMenuContent
           align="start"
           width={DROPDOWN_WIDTH}
-          pages={openWith.pages}
+          pages={moveAgentPages} // PATCH(agent-move): carries openWith.pages too
           testID={contextMenuTestId}
         >
           {menuEntries.map((entry) => {
@@ -950,7 +964,7 @@ function TabChip({
             if (entry.kind === "file-panel-open-with") {
               return <Fragment key={entry.key}>{openWith.trigger}</Fragment>;
             }
-            return <TabContextMenuItem key={entry.key} entry={entry} />;
+            return <TabMenuEntryItem key={entry.key} entry={entry} />; // PATCH(agent-move)
           })}
         </ContextMenuContent>
       </ContextMenu>
