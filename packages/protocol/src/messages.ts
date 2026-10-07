@@ -1898,6 +1898,15 @@ export const AgentForkNativeRequestMessageSchema = AgentForkContextRequestMessag
   type: z.literal("agent.fork_native.request"),
 });
 
+// PATCH(agent-move): move an agent into another workspace of this daemon. The agent keeps its
+// id, session, and timeline; it reloads under the workspace's directory.
+export const AgentMoveRequestMessageSchema = z.object({
+  type: z.literal("agent.move.request"),
+  agentId: z.string(),
+  workspaceId: z.string(),
+  requestId: z.string(),
+});
+
 export const SetAgentModeRequestMessageSchema = z.object({
   type: z.literal("set_agent_mode_request"),
   agentId: z.string(),
@@ -3261,6 +3270,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   SetAgentTimelineSubscriptionRequestMessageSchema,
   AgentForkContextRequestMessageSchema,
   AgentForkNativeRequestMessageSchema, // PATCH(native-fork)
+  AgentMoveRequestMessageSchema, // PATCH(agent-move)
   SetAgentModeRequestMessageSchema,
   SetAgentModelRequestMessageSchema,
   SetAgentThinkingRequestMessageSchema,
@@ -3649,6 +3659,8 @@ export const ServerInfoStatusPayloadSchema = z
         agentForkContextCursor: z.boolean().optional(),
         // PATCH(native-fork): the daemon handles agent.fork_native.request.
         agentForkNative: z.boolean().optional(),
+        // PATCH(agent-move): the daemon handles agent.move.request.
+        agentMove: z.boolean().optional(),
         // COMPAT(providerSubagents): added in v0.1.107, remove gate after 2027-01-12.
         providerSubagents: z.boolean().optional(),
         // COMPAT(projectedSubagentTimeline): added after v0.8.0, remove gates after 2027-03-14; retain wire field.
@@ -4808,6 +4820,17 @@ export const AgentForkContextResponseMessageSchema = z.object({
 // natively, so the caller should fall back to the fork-context attachment.
 export const AgentForkNativeResponseMessageSchema = z.object({
   type: z.literal("agent.fork_native.response"),
+  payload: z.object({
+    requestId: z.string(),
+    agentId: z.string(),
+    agent: AgentSnapshotPayloadSchema.nullable(),
+    error: z.string().nullable(),
+  }),
+});
+
+// PATCH(agent-move): the moved agent's snapshot, or an error.
+export const AgentMoveResponseMessageSchema = z.object({
+  type: z.literal("agent.move.response"),
   payload: z.object({
     requestId: z.string(),
     agentId: z.string(),
@@ -6842,6 +6865,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   AgentAttentionRequiredMessageSchema,
   AgentForkContextResponseMessageSchema,
   AgentForkNativeResponseMessageSchema, // PATCH(native-fork)
+  AgentMoveResponseMessageSchema, // PATCH(agent-move)
   CancelAgentResponseMessageSchema,
   ClearAgentAttentionResponseMessageSchema,
   WorkspaceCreateResponseSchema,
@@ -7062,6 +7086,7 @@ export type AgentTimelineListPromptsResponseMessage = z.infer<
 >;
 export type AgentForkContextResponseMessage = z.infer<typeof AgentForkContextResponseMessageSchema>;
 export type AgentForkNativeResponseMessage = z.infer<typeof AgentForkNativeResponseMessageSchema>; // PATCH(native-fork)
+export type AgentMoveResponseMessage = z.infer<typeof AgentMoveResponseMessageSchema>; // PATCH(agent-move)
 export type CancelAgentResponseMessage = z.infer<typeof CancelAgentResponseMessageSchema>;
 export type SendAgentMessageResponseMessage = z.infer<typeof SendAgentMessageResponseMessageSchema>;
 export type SetVoiceModeResponseMessage = z.infer<typeof SetVoiceModeResponseMessageSchema>;
@@ -7167,6 +7192,7 @@ export type ProjectListRequestMessage = z.infer<typeof ProjectListRequestMessage
 export type FetchAgentRequestMessage = z.infer<typeof FetchAgentRequestMessageSchema>;
 export type AgentForkContextRequestMessage = z.infer<typeof AgentForkContextRequestMessageSchema>;
 export type AgentForkNativeRequestMessage = z.infer<typeof AgentForkNativeRequestMessageSchema>; // PATCH(native-fork)
+export type AgentMoveRequestMessage = z.infer<typeof AgentMoveRequestMessageSchema>; // PATCH(agent-move)
 export type SendAgentMessageRequest = z.infer<typeof SendAgentMessageRequestSchema>;
 export type WaitForFinishRequest = z.infer<typeof WaitForFinishRequestSchema>;
 export type DictationStreamStartMessage = z.infer<typeof DictationStreamStartMessageSchema>;

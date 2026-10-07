@@ -635,6 +635,9 @@ export const ar: TranslationResources = {
         closeRight: "قريب من اليمين",
         closeOthers: "أغلق علامات التبويب الأخرى",
         moveToMain: "Move to main panel",
+        moveAgent: "نقل إلى مساحة عمل", // PATCH(agent-move)
+        moveAgentEmpty: "لا توجد مساحات عمل أخرى", // PATCH(agent-move)
+        moveAgentFailed: "فشل نقل الوكيل", // PATCH(agent-move)
         reloadAgent: "إعادة تحميل الوكيل",
         reloadAgentTooltip: "قم بإعادة تحميل الوكيل لتحديث المهارات أو MCPs أو حالة تسجيل الدخول.",
         close: "يغلق",

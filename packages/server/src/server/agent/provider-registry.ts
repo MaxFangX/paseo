@@ -474,6 +474,7 @@ export function wrapSessionProvider(provider: AgentProvider, inner: AgentSession
     revertFiles: inner.revertFiles?.bind(inner),
     revertBoth: inner.revertBoth?.bind(inner),
     forkConversation: inner.forkConversation?.bind(inner), // PATCH(native-fork)
+    moveConversation: inner.moveConversation?.bind(inner), // PATCH(agent-move)
     tryHandleOutOfBand: inner.tryHandleOutOfBand?.bind(inner),
   };
 }

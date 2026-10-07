@@ -636,6 +636,9 @@ export const ko: TranslationResources = {
         closeRight: "오른쪽 탭 닫기",
         closeOthers: "다른 탭 닫기",
         moveToMain: "기본 패널로 이동",
+        moveAgent: "워크스페이스로 이동", // PATCH(agent-move)
+        moveAgentEmpty: "다른 워크스페이스가 없습니다", // PATCH(agent-move)
+        moveAgentFailed: "에이전트를 이동하지 못했습니다", // PATCH(agent-move)
         reloadAgent: "에이전트 다시 로드",
         reloadAgentTooltip:
           "스킬, MCP 또는 로그인 상태를 업데이트하려면 에이전트를 다시 로드하세요.",

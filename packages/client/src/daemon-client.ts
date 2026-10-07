@@ -43,6 +43,7 @@ import type {
   FetchAgentTimelineResponseMessage,
   AgentForkContextResponseMessage,
   AgentForkNativeResponseMessage, // PATCH(native-fork)
+  AgentMoveResponseMessage, // PATCH(agent-move)
   AgentForkSource, // PATCH(native-fork)
   GitSetupOptions,
   CheckoutStatusResponse,
@@ -646,6 +647,7 @@ type ScheduleUpdatePayload = Extract<
 export type FetchAgentTimelinePayload = FetchAgentTimelineResponseMessage["payload"];
 export type AgentForkContextPayload = AgentForkContextResponseMessage["payload"];
 export type AgentForkNativePayload = AgentForkNativeResponseMessage["payload"]; // PATCH(native-fork)
+export type AgentMovePayload = AgentMoveResponseMessage["payload"]; // PATCH(agent-move)
 
 export type FetchAgentTimelineDirection = FetchAgentTimelinePayload["direction"];
 export type FetchAgentTimelineProjection = FetchAgentTimelinePayload["projection"];
@@ -3436,6 +3438,17 @@ export class DaemonClient {
         },
       },
     );
+    if (payload.error) {
+      throw new Error(payload.error);
+    }
+    return payload;
+  }
+
+  // PATCH(agent-move)
+  async moveAgent(agentId: string, workspaceId: string): Promise<AgentMovePayload> {
+    const payload = await this.sendNamespacedCorrelatedSessionRequest<"agent.move.response">({
+      message: { type: "agent.move.request", agentId, workspaceId },
+    });
     if (payload.error) {
       throw new Error(payload.error);
     }

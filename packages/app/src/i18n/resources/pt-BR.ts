@@ -640,6 +640,9 @@ export const ptBR: TranslationResources = {
         closeRight: "Fechar à direita",
         closeOthers: "Fechar outras abas",
         moveToMain: "Mover para o painel principal",
+        moveAgent: "Mover para workspace", // PATCH(agent-move)
+        moveAgentEmpty: "Não há outros workspaces", // PATCH(agent-move)
+        moveAgentFailed: "Falha ao mover o agente", // PATCH(agent-move)
         reloadAgent: "Recarregar agente",
         reloadAgentTooltip: "Recarregue o agente para atualizar skills, MCPs ou status de login.",
         close: "Fechar",
