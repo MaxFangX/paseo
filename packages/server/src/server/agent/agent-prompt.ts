@@ -380,7 +380,12 @@ export interface SetupFinishNotificationParams {
   logger: Logger;
 }
 
-type FinishNotificationReason = "finished" | "errored" | "needs permission" | "was closed";
+type FinishNotificationReason =
+  | "finished"
+  | "errored"
+  | "needs permission"
+  | "was closed"
+  | "was stopped"; // PATCH(stop-notification)
 
 const FINISH_NOTIFICATION_MESSAGE_LIMIT = 4000;
 
@@ -395,6 +400,12 @@ interface FinishNotificationBodyInput {
 function formatFinishNotificationBody(params: FinishNotificationBodyInput): string {
   const statusLine = `Agent ${params.childAgentId} (${params.title}) ${params.reason}.`;
   const sections = [statusLine];
+  // PATCH(stop-notification): a stopped turn is a pause, not a result.
+  if (params.reason === "was stopped") {
+    sections.push(
+      "Its turn was interrupted, so any response below is partial. Treat its work as paused, not done; send a follow-up with `send_agent_prompt` when it should continue.",
+    );
+  }
   if (params.reason === "needs permission" && params.permissionRequest) {
     sections.push(
       "Respond with `respond_to_permission` using the `agentId` and `requestId` below.",
@@ -494,6 +505,20 @@ export function setupFinishNotification(params: SetupFinishNotificationParams): 
     });
   }
 
+  // PATCH(stop-notification): the manager emits the idle state before the turn_canceled stream
+  // event, both synchronously from one handler. Hold the finish for a microtask so the cancel,
+  // when there is one, can turn "finished" into "was stopped".
+  let pendingFinishReason: "finished" | "was stopped" | null = null;
+  function scheduleFinish(): void {
+    if (pendingFinishReason) return;
+    pendingFinishReason = "finished";
+    queueMicrotask(() => {
+      const reason = pendingFinishReason ?? "finished";
+      pendingFinishReason = null;
+      notifySafely(reason);
+    });
+  }
+
   function notifySafely(reason: FinishNotificationReason, options: NotifySafelyOptions = {}): void {
     if (stopped) return;
     if (options.terminal ?? true) stop();
@@ -530,7 +555,7 @@ export function setupFinishNotification(params: SetupFinishNotificationParams): 
           return;
         }
         if (event.agent.lifecycle === "idle" && hasSeenRunning) {
-          notifySafely("finished");
+          scheduleFinish(); // PATCH(stop-notification)
           return;
         }
         if (event.agent.lifecycle === "closed") {
@@ -541,6 +566,12 @@ export function setupFinishNotification(params: SetupFinishNotificationParams): 
       }
 
       if (event.type === "timeline_replacement") {
+        return;
+      }
+
+      // PATCH(stop-notification)
+      if (event.event.type === "turn_canceled") {
+        if (pendingFinishReason) pendingFinishReason = "was stopped";
         return;
       }
 

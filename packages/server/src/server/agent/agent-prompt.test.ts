@@ -228,6 +228,20 @@ function createFinishNotificationScenario(
 
       return parentPrompt;
     },
+    // PATCH(stop-notification): mirrors the manager, which emits idle before turn_canceled.
+    async stopChildAndReadParentPrompt() {
+      const parentPrompt = new Promise<string>((resolve) => {
+        resolveParentPrompt = resolve;
+      });
+      this.finishChild();
+      subscriber?.({
+        type: "agent_stream",
+        agentId: "child-agent",
+        event: { type: "turn_canceled", provider: "claude", reason: "Interrupted" },
+      });
+
+      return parentPrompt;
+    },
     async closeChildAndReadParentPrompt() {
       const parentPrompt = new Promise<string>((resolve) => {
         resolveParentPrompt = resolve;
@@ -306,6 +320,22 @@ test("closing a watched child notifies the caller", async () => {
   expect(parentPrompt).toEqual(
     formatSystemNotificationPrompt("Agent child-agent (Child Agent) was closed."),
   );
+});
+
+// PATCH(stop-notification)
+test("stopping a watched child reports a pause, not a finish", async () => {
+  const scenario = createFinishNotificationScenario({
+    childLastAssistantMessage: "Halfway through the migration.",
+  });
+
+  scenario.startWatchingChild();
+  const parentPrompt = await scenario.stopChildAndReadParentPrompt();
+
+  expect(parentPrompt).toContain("Agent child-agent (Child Agent) was stopped.");
+  expect(parentPrompt).toContain("Treat its work as paused, not done");
+  expect(parentPrompt).toContain("Halfway through the migration.");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(scenario.parentPrompts()).toHaveLength(1);
 });
 
 test("finish notifications survive permission responses", async () => {
