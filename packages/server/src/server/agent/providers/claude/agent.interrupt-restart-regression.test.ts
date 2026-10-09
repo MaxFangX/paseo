@@ -333,6 +333,20 @@ async function startSteeredTurn(sessionId: string): Promise<{
   return { session, query: () => query, turn };
 }
 
+// PATCH(claude-resumable-stop): an SDK interrupt makes Claude Code mark every background Task
+// agent as user-stopped and refuse to resume it. Close must end the process without one.
+test("close retires the process without an SDK interrupt, even mid-turn", async () => {
+  const { session, query, turn } = await startSteeredTurn("close-no-interrupt-session");
+
+  await session.close();
+
+  expect(query()?.interrupt).not.toHaveBeenCalled();
+  expect(query()?.return).toHaveBeenCalledTimes(1);
+  expect(await collectUntilTerminal(turn)).toContainEqual(
+    expect.objectContaining({ type: "turn_canceled" }),
+  );
+});
+
 test("interrupt discards a queued steer so it cannot resume the stopped turn", async () => {
   const { session, query, turn } = await startSteeredTurn("queued-steer-discard-session");
 
@@ -345,9 +359,12 @@ test("interrupt discards a queued steer so it cannot resume the stopped turn", a
   );
 
   // Nothing is queued any more, so a second interrupt has no steer left to discard.
+  // PATCH(claude-resumable-stop): with no turn running it retires the process instead of
+  // interrupting it, so the SDK interrupt count stays at one.
   query()?.cancelAsyncMessage.mockClear();
   await session.interrupt();
-  await waitFor(() => query()?.interrupt.mock.calls.length === 2);
+  await waitFor(() => query()?.return.mock.calls.length === 1);
+  expect(query()?.interrupt).toHaveBeenCalledTimes(1);
   expect(query()?.cancelAsyncMessage).not.toHaveBeenCalled();
 
   await session.close();

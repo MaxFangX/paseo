@@ -297,23 +297,29 @@ export class ClaudeTaskProtocolSource {
    * outlive the turn; everything else was running in the foreground and died with it.
    */
   cancelRunningForegroundTasks(): SubagentObservation[] {
-    const observations: SubagentObservation[] = [];
-    for (const id of this.declaredIds) {
-      if (this.backgroundedIds.has(id)) continue;
-      if (this.lastStatusById.get(id) !== "running") continue;
-      this.lastStatusById.set(id, "canceled");
-      observations.push({ kind: "status", id, status: "canceled" });
-    }
-    return observations;
+    return this.terminalizeRunningTasks("canceled", { skipBackgrounded: true });
   }
 
   /** A lost Claude process terminates every task it owned, including backgrounded workflows. */
   failRunningTasks(): SubagentObservation[] {
+    return this.terminalizeRunningTasks("failed", { skipBackgrounded: false });
+  }
+
+  /** A process retired on purpose (Stop) ends every task it owned; that is a cancel, not a crash. */
+  cancelRunningTasks(): SubagentObservation[] {
+    return this.terminalizeRunningTasks("canceled", { skipBackgrounded: false });
+  }
+
+  private terminalizeRunningTasks(
+    status: "canceled" | "failed",
+    options: { skipBackgrounded: boolean },
+  ): SubagentObservation[] {
     const observations: SubagentObservation[] = [];
     for (const id of this.declaredIds) {
+      if (options.skipBackgrounded && this.backgroundedIds.has(id)) continue;
       if (this.lastStatusById.get(id) !== "running") continue;
-      this.lastStatusById.set(id, "failed");
-      observations.push({ kind: "status", id, status: "failed" });
+      this.lastStatusById.set(id, status);
+      observations.push({ kind: "status", id, status });
     }
     return observations;
   }

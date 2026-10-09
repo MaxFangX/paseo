@@ -50,6 +50,17 @@ older cancellation from settling a newer turn. If interruption is rejected or ti
 keeps its active foreground turn and replacement, reload, rewind, and Stop report the failure.
 Accepting new work after an ambiguous interruption would create a split-brain session.
 
+**Claude: Stop and close never send the SDK interrupt unless a foreground turn is running.**
+`PATCH(claude-resumable-stop)`, fork-only. Claude Code records an SDK interrupt as a user stop on
+every background Task agent the process owns (`stoppedByUser` in the agent's meta file) and then
+refuses `SendMessage` to it forever; the Agent tool's `resume` on such an id silently starts a
+fresh agent instead. Ending the process without an interrupt leaves no mark, and the next parent
+turn can `SendMessage` each child back to life. So with no foreground turn, Stop retires the
+process (stdin EOF, tree-kill) and reports its tasks `canceled`; `close()` does the same on
+archive, daemon shutdown, and app quit. Stop during a foreground turn still interrupts, and still
+marks children stopped. The retire runs in the background so Stop answers at once; `ensureQuery()`
+waits for it before spawning the replacement.
+
 ## Relationships
 
 Agents can launch other agents via the agent-scoped `create_agent` MCP tool. Agent-scoped creation is always asynchronous and always stamps `paseo.parent-agent-id`, pointing back at the caller. Omit `workspaceId` to use the caller's workspace, or pass an existing workspace ID returned by `create_workspace`. Placement never changes parentage.
