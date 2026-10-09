@@ -32,6 +32,12 @@ import {
  * turn ending warrants is `cancelRunningForegroundTasks`, not forgetting the session.
  */
 
+/** A background task that was running when Paseo retired the process. */
+export interface SuspendedTask {
+  taskId: string;
+  description: string | undefined;
+}
+
 interface TaskStartedMessage {
   task_id: string;
   tool_use_id?: string;
@@ -185,6 +191,8 @@ export class ClaudeTaskProtocolSource {
   private readonly lastStatusById = new Map<string, ProviderSubagentStatus>();
   /** Claude facts stay inside the provider boundary; clients receive one compact subtitle. */
   private readonly presentationById = new Map<string, ClaudeSubagentPresentationFacts>();
+  /** PATCH(claude-resumable-stop): Task descriptions, to name suspended children to the parent. */
+  private readonly descriptionById = new Map<string, string>();
   private readonly lastSubtitleById = new Map<string, string>();
   private sawTaskStarted = false;
   private sawAnyTask = false;
@@ -286,6 +294,7 @@ export class ClaudeTaskProtocolSource {
     this.backgroundedIds.clear();
     this.lastStatusById.clear();
     this.presentationById.clear();
+    this.descriptionById.clear();
     this.lastSubtitleById.clear();
     this.sawTaskStarted = false;
     this.sawAnyTask = false;
@@ -303,23 +312,42 @@ export class ClaudeTaskProtocolSource {
    * outlive the turn; everything else was running in the foreground and died with it.
    */
   cancelRunningForegroundTasks(): SubagentObservation[] {
-    const observations: SubagentObservation[] = [];
-    for (const id of this.declaredIds) {
-      if (this.backgroundedIds.has(id)) continue;
-      if (this.lastStatusById.get(id) !== "running") continue;
-      this.lastStatusById.set(id, "canceled");
-      observations.push({ kind: "status", id, status: "canceled" });
-    }
-    return observations;
+    return this.terminalizeRunningTasks("canceled", { skipBackgrounded: true });
   }
 
   /** A lost Claude process terminates every task it owned, including backgrounded workflows. */
   failRunningTasks(): SubagentObservation[] {
+    return this.terminalizeRunningTasks("failed", { skipBackgrounded: false });
+  }
+
+  /**
+   * Running tasks by Claude task id, which is the id `SendMessage` takes, so a parent can be told
+   * which children to resume. Not the tool_use id the rest of the table is keyed by.
+   */
+  listRunningTasks(): SuspendedTask[] {
+    const tasks: SuspendedTask[] = [];
+    for (const [taskId, id] of this.subagentIdByTaskId) {
+      if (!this.declaredIds.has(id) || this.lastStatusById.get(id) !== "running") continue;
+      tasks.push({ taskId, description: this.descriptionById.get(id) });
+    }
+    return tasks;
+  }
+
+  /** A process retired on purpose (Stop) ends every task it owned; that is a cancel, not a crash. */
+  cancelRunningTasks(): SubagentObservation[] {
+    return this.terminalizeRunningTasks("canceled", { skipBackgrounded: false });
+  }
+
+  private terminalizeRunningTasks(
+    status: "canceled" | "failed",
+    options: { skipBackgrounded: boolean },
+  ): SubagentObservation[] {
     const observations: SubagentObservation[] = [];
     for (const id of this.declaredIds) {
+      if (options.skipBackgrounded && this.backgroundedIds.has(id)) continue;
       if (this.lastStatusById.get(id) !== "running") continue;
-      this.lastStatusById.set(id, "failed");
-      observations.push({ kind: "status", id, status: "failed" });
+      this.lastStatusById.set(id, status);
+      observations.push({ kind: "status", id, status });
     }
     return observations;
   }
@@ -379,6 +407,8 @@ export class ClaudeTaskProtocolSource {
     this.canonicalIdByToolUseId.set(id, id);
     this.declaredIds.add(id);
     this.lastStatusById.set(id, "running");
+    const taskDescription = readString(message.description);
+    if (taskDescription) this.descriptionById.set(id, taskDescription);
 
     // An explicit `name` on the Task call wins over the agent type, matching how replay titles the
     // same subagent. Without it a fan-out of five Explores reads as five identical rows.

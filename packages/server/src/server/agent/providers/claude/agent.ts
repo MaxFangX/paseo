@@ -1,4 +1,5 @@
 import { validateProviderOptions } from "../../provider-options.js";
+import { formatSystemNotificationPrompt, isSystemInjectedEnvelope } from "../../agent-prompt.js";
 import type { ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -48,6 +49,7 @@ import { readClaudeSubagentHandback } from "./subagent-handback.js";
 import { ClaudeTaskState } from "./task-state.js";
 import {
   ClaudeTaskProtocolSource,
+  type SuspendedTask,
   type ClaudeHookObservationInput,
 } from "./subagents/live-source.js";
 import {
@@ -2142,6 +2144,8 @@ class ClaudeAgentSession implements AgentSession {
   private compactionMarkerOpen = false;
   private queryPumpPromise: Promise<void> | null = null;
   private queryRestartNeeded = false;
+  private retireInFlight: Promise<void> | null = null;
+  private suspendedTasks: SuspendedTask[] = [];
   private pendingInterruptAbort = false;
   /**
    * Whether Claude's main session is inside one of its own turns: set by system/init and by a
@@ -2285,6 +2289,7 @@ class ClaudeAgentSession implements AgentSession {
     }
 
     const sdkMessage = this.toSdkUserMessage(prompt);
+    this.prependSuspendedTasksNotice(sdkMessage);
     const sdkUserMessageId =
       typeof sdkMessage.uuid === "string" && sdkMessage.uuid.length > 0 ? sdkMessage.uuid : null;
     this.rememberRewindUserAnchor(sdkUserMessageId);
@@ -2312,11 +2317,18 @@ class ClaudeAgentSession implements AgentSession {
         this.mainTurnInFlight ||
         (sdkUserMessageId !== null && !this.unstartedMessageUuids.has(sdkUserMessageId));
       this.rejectAllPendingPermissions(new Error("Permission request canceled"));
+      const running = this.taskProtocolSource.listRunningTasks();
       this.finishForegroundTurn({
         type: "turn_canceled",
         provider: "claude",
         reason: "Interrupted",
       });
+      // PATCH(claude-resumable-stop): with Task agents alive, an interrupt would mark them
+      // user-stopped for good. Retire the process instead; the turn above is already settled.
+      if (running.length > 0) {
+        this.retireOnStop(running);
+        return;
+      }
       void this.interruptActiveTurn(claudeStartedTurn).catch((error) => {
         this.logger.warn({ err: error }, "Failed to interrupt during cancel");
       });
@@ -2425,12 +2437,63 @@ class ClaudeAgentSession implements AgentSession {
       return;
     }
 
+    // PATCH(claude-resumable-stop): with no foreground turn, Stop means "stop the background
+    // work". Retire the process instead of interrupting it so the Task agents stay resumable.
+    const running = this.taskProtocolSource.listRunningTasks();
     if (this.autonomousTurn) {
       this.flushPendingToolCalls();
       this.completeAutonomousTurn();
     }
+    this.retireOnStop(running);
+  }
 
-    await this.interruptActiveTurn();
+  /**
+   * PATCH(claude-resumable-stop): Stop without an SDK interrupt. The turn is already settled, so
+   * the kill finishes in the background and Stop answers at once. `running` is the task list from
+   * before the turn was finished, since finishing marks foreground children canceled; it is kept
+   * so the next prompt can tell the parent to resume them.
+   */
+  private retireOnStop(running: SuspendedTask[]): void {
+    for (const task of running) {
+      if (!this.suspendedTasks.some((entry) => entry.taskId === task.taskId)) {
+        this.suspendedTasks.push(task);
+      }
+    }
+    this.retireInFlight = this.retireQuery("canceled").finally(() => {
+      this.retireInFlight = null;
+    });
+  }
+
+  /**
+   * PATCH(claude-resumable-stop): on resume Claude only reports the suspended children as
+   * `stopped`, which reads as cancelled. Lead the next prompt with the fact that they are
+   * resumable. The block is a system envelope, so the timeline hides it like other injected text.
+   */
+  private prependSuspendedTasksNotice(message: SDKUserMessage): void {
+    if (this.suspendedTasks.length === 0) {
+      return;
+    }
+    const lines = this.suspendedTasks.map(
+      (task) => `- ${task.taskId}${task.description ? `: ${task.description}` : ""}`,
+    );
+    this.suspendedTasks = [];
+    const notice = formatSystemNotificationPrompt(
+      [
+        "Paseo stopped your process while these background agents were still running. They were",
+        "suspended, not cancelled: each one still accepts SendMessage and continues from its own",
+        "transcript. Resume the ones whose work is unfinished instead of launching replacements.",
+        ...lines,
+      ].join("\n"),
+    );
+    const content = message.message.content;
+    if (typeof content === "string") {
+      message.message.content = [
+        { type: "text", text: notice },
+        { type: "text", text: content },
+      ];
+      return;
+    }
+    content.unshift({ type: "text", text: notice });
   }
 
   async *streamHistory(): AsyncGenerator<AgentStreamEvent> {
@@ -2761,7 +2824,7 @@ class ClaudeAgentSession implements AgentSession {
     this.taskProtocolSource.reset();
     this.input?.end();
     this.query?.close?.();
-    await this.awaitWithTimeout(this.query?.interrupt?.(), "close query interrupt");
+    // PATCH(claude-resumable-stop): no SDK interrupt on close; see retireQuery().
     await this.awaitWithTimeout(this.query?.return?.(), "close query return");
     this.query = null;
     this.input = null;
@@ -3213,6 +3276,50 @@ class ClaudeAgentSession implements AgentSession {
     return { kind: "fresh-session" };
   }
 
+  /**
+   * Retire the live process on purpose, without an SDK interrupt: end stdin, close the query,
+   * then tree-kill. Detaching the query and child first keeps the pump and the exit handler from
+   * reporting a crash. The next ensureQuery() spawns a replacement that resumes the session.
+   *
+   * PATCH(claude-resumable-stop): the interrupt is what Claude Code records as a user stop on
+   * every background Task agent it owns, after which it refuses to resume them. Ending the
+   * process without one leaves those agents resumable through SendMessage on the next turn.
+   */
+  private async retireQuery(runtimeTaskOutcome: "failed" | "canceled"): Promise<void> {
+    const oldQuery = this.query;
+    const oldInput = this.input;
+    if (!oldQuery) {
+      return;
+    }
+    // Null out query/input BEFORE awaiting the old iterator's return so the
+    // old pump sees this.query !== activeQuery and skips failActiveTurns.
+    this.query = null;
+    this.input = null;
+    this.queryPumpPromise = null;
+    this.queryRestartNeeded = false;
+    const retiredChild = this.childProcess;
+    this.childProcess = null;
+    if (retiredChild) this.terminalizeRunningRuntimeTasks(runtimeTaskOutcome);
+    oldInput?.end();
+    oldQuery.close?.();
+    try {
+      await oldQuery.return?.();
+    } catch {
+      /* ignore */
+    }
+    // Tree-kill the old process tree now that the SDK has cleaned up.
+    // If we skip this, MCP children of the previous claude process can
+    // survive as orphans when the session spawns a replacement query.
+    if (retiredChild) {
+      await terminateWithTreeKill(retiredChild, {
+        gracefulTimeoutMs: 2_000,
+        forceTimeoutMs: 2_000,
+      }).catch(() => {
+        /* process may already be dead */
+      });
+    }
+  }
+
   private async ensureQuery(launchMode: PermissionMode = this.currentMode): Promise<Query> {
     // PATCH(claude-midturn-restart): restarting retires the process this turn runs on, leaving
     // the turn open forever. Keep the live query; the next turn's start applies the restart.
@@ -3224,38 +3331,10 @@ class ClaudeAgentSession implements AgentSession {
     }
 
     if (this.queryRestartNeeded && this.query) {
-      const oldQuery = this.query;
-      const oldInput = this.input;
-      // Null out query/input BEFORE awaiting the old iterator's return so the
-      // old pump sees this.query !== activeQuery and skips failActiveTurns.
-      this.query = null;
-      this.input = null;
-      this.queryPumpPromise = null;
-      this.queryRestartNeeded = false;
-      // Ending the input retires the process on purpose. Detach first so its
-      // exit is not reported as a crash.
-      const retiredChild = this.childProcess;
-      this.childProcess = null;
-      if (retiredChild) this.failRunningRuntimeTasks();
-      oldInput?.end();
-      oldQuery.close?.();
-      try {
-        await oldQuery.return?.();
-      } catch {
-        /* ignore */
-      }
-      // Tree-kill the old process tree now that the SDK has cleaned up.
-      // If we skip this, MCP children of the previous claude process can
-      // survive as orphans when the session spawns a replacement query.
-      if (retiredChild) {
-        await terminateWithTreeKill(retiredChild, {
-          gracefulTimeoutMs: 2_000,
-          forceTimeoutMs: 2_000,
-        }).catch(() => {
-          /* process may already be dead */
-        });
-      }
+      await this.retireQuery("failed");
     }
+    // A Stop may still be tearing the previous process down; never run two against one session.
+    await this.retireInFlight;
 
     // Preserve claudeSessionId across query recreation so buildOptions() passes
     // resume: sessionId and the new query continues the existing conversation.
@@ -3851,8 +3930,16 @@ class ClaudeAgentSession implements AgentSession {
   }
 
   private failRunningRuntimeTasks(): void {
+    this.terminalizeRunningRuntimeTasks("failed");
+  }
+
+  private terminalizeRunningRuntimeTasks(outcome: "failed" | "canceled"): void {
+    const observations =
+      outcome === "failed"
+        ? this.taskProtocolSource.failRunningTasks()
+        : this.taskProtocolSource.cancelRunningTasks();
     this.dispatchEvents(
-      foldSubagentObservations(this.taskProtocolSource.failRunningTasks()).map(
+      foldSubagentObservations(observations).map(
         (event): AgentStreamEvent => ({ type: "provider_subagent", provider: "claude", event }),
       ),
     );
@@ -4201,6 +4288,11 @@ class ClaudeAgentSession implements AgentSession {
    * perTaskStopAffordance), and no result would follow to consume pendingInterruptAbort.
    */
   private async interruptActiveTurn(claudeStartedTurn = this.mainTurnInFlight): Promise<void> {
+    // PATCH(claude-resumable-stop): close() cancels the turn before retiring the process; the
+    // retire is what ends the turn, and an interrupt here would mark the Task agents stopped.
+    if (this.closed) {
+      return;
+    }
     const queryToInterrupt = this.query;
     if (!queryToInterrupt || typeof queryToInterrupt.interrupt !== "function") {
       this.logger.trace(
@@ -5363,7 +5455,8 @@ class ClaudeAgentSession implements AgentSession {
     }
     if (textMessageType === "user_message") {
       const trimmed = text.trim();
-      if (trimmed) {
+      // PATCH(claude-resumable-stop): an injected system envelope is not the user's text.
+      if (trimmed && !isSystemInjectedEnvelope(trimmed)) {
         userTextParts.push(trimmed);
       }
       return;

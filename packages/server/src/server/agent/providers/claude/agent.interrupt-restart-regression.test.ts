@@ -355,6 +355,81 @@ async function startSteeredTurn(sessionId: string): Promise<{
   return { session, query: () => query, turn };
 }
 
+// PATCH(claude-resumable-stop): an SDK interrupt makes Claude Code mark every background Task
+// agent as user-stopped and refuse to resume it. Close must end the process without one.
+test("close retires the process without an SDK interrupt, even mid-turn", async () => {
+  const { session, query, turn } = await startSteeredTurn("close-no-interrupt-session");
+
+  await session.close();
+
+  expect(query()?.interrupt).not.toHaveBeenCalled();
+  expect(query()?.return).toHaveBeenCalledTimes(1);
+  expect(await collectUntilTerminal(turn)).toContainEqual(
+    expect.objectContaining({ type: "turn_canceled" }),
+  );
+});
+
+// PATCH(claude-resumable-stop): Stop while a background Task agent is alive must not interrupt
+// either, and the next prompt has to tell the parent that the child is resumable.
+test("Stop mid-turn with a live Task agent retires the process and briefs the next prompt", async () => {
+  const queries: ScriptedQuery[] = [];
+  queryFactory.mockImplementation(({ prompt }: { prompt: AsyncIterable<unknown> }) => {
+    const scriptedQuery = createScriptedQuery({ prompt, sessionId: "suspend-session" });
+    queries.push(scriptedQuery);
+    return scriptedQuery;
+  });
+  const session = await new ClaudeAgentClient({
+    logger: createTestLogger(),
+    queryFactory,
+    resolveBinary: async () => "/test/claude/bin",
+  }).createSession({ provider: "claude", cwd: process.cwd() });
+
+  const firstTurn = streamSession(session, "orchestrate");
+  await firstTurn.next();
+  await waitFor(() => queries[0]?.prompts.length === 1);
+  queries[0]?.emit({
+    type: "system",
+    subtype: "task_started",
+    session_id: "suspend-session",
+    task_id: "a1234567890abcdef",
+    tool_use_id: "toolu_child",
+    task_type: "local_agent",
+    subagent_type: "general-purpose",
+    description: "Build the ledger",
+    prompt: "Build the ledger module",
+  });
+  // The task is in the table once its descriptor reaches the stream.
+  let next = await firstTurn.next();
+  while (!next.done && next.value.type !== "provider_subagent") {
+    next = await firstTurn.next();
+  }
+
+  await session.interrupt();
+  await waitFor(() => queries[0]?.return.mock.calls.length === 1);
+  expect(queries[0]?.interrupt).not.toHaveBeenCalled();
+  expect(await collectUntilTerminal(firstTurn)).toContainEqual(
+    expect.objectContaining({ type: "turn_canceled" }),
+  );
+
+  const secondTurn = streamSession(session, "continue please");
+  await secondTurn.next();
+  await waitFor(() => queries[1]?.prompts.length === 1);
+  const sent = queries[1]?.prompts[0]?.text ?? "";
+  expect(sent).toMatch(/^<paseo-system>\n/);
+  expect(sent).toContain("- a1234567890abcdef: Build the ledger");
+  expect(sent).toMatch(/continue please$/);
+
+  // The submitted prompt reaches the timeline on a later tick than the SDK push.
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  queries[1]?.emit(buildSuccessResult("suspend-session"));
+  const userMessages = (await collectUntilTerminal(secondTurn)).flatMap((event) =>
+    event.type === "timeline" && event.item.type === "user_message" ? [event.item.text] : [],
+  );
+  expect(userMessages).toEqual(["continue please"]);
+
+  await session.close();
+});
+
 test("interrupt discards a queued steer so it cannot resume the stopped turn", async () => {
   const { session, query, turn } = await startSteeredTurn("queued-steer-discard-session");
 
@@ -367,9 +442,12 @@ test("interrupt discards a queued steer so it cannot resume the stopped turn", a
   );
 
   // Nothing is queued any more, so a second interrupt has no steer left to discard.
+  // PATCH(claude-resumable-stop): with no turn running it retires the process instead of
+  // interrupting it, so the SDK interrupt count stays at one.
   query()?.cancelAsyncMessage.mockClear();
   await session.interrupt();
-  await waitFor(() => query()?.interrupt.mock.calls.length === 2);
+  await waitFor(() => query()?.return.mock.calls.length === 1);
+  expect(query()?.interrupt).toHaveBeenCalledTimes(1);
   expect(query()?.cancelAsyncMessage).not.toHaveBeenCalled();
 
   await session.close();
