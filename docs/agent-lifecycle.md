@@ -50,6 +50,21 @@ older cancellation from settling a newer turn. If interruption is rejected or ti
 keeps its active foreground turn and replacement, reload, rewind, and Stop report the failure.
 Accepting new work after an ambiguous interruption would create a split-brain session.
 
+**Claude: Stop and close never send the SDK interrupt while a Task agent is alive.**
+`PATCH(claude-resumable-stop)`, fork-only. Claude Code records an SDK interrupt as a user stop on
+every background Task agent the process owns (`stoppedByUser` in the agent's meta file) and then
+refuses `SendMessage` to it forever; the Agent tool's `resume` on such an id silently starts a
+fresh agent instead. Ending the process without an interrupt leaves no mark, and the parent can
+`SendMessage` each child back to life. So Stop retires the process (stdin EOF, tree-kill) and
+reports its tasks `canceled` whenever no foreground turn is running or a Task agent is still
+running; `close()` never interrupts, on archive, daemon shutdown, and app quit alike. Only a Stop
+on a foreground turn with no live children still interrupts. The retire runs in the background
+so Stop answers at once; `ensureQuery()` waits for it before spawning the replacement. Children
+retired by Stop are remembered in memory, and the next prompt opens with a `<paseo-system>` block
+naming them as resumable, since on resume Claude only reports them `stopped`. The block is hidden
+from the timeline. A daemon restart forgets the list; the children stay resumable, the parent is
+just not told.
+
 ## Relationships
 
 Agents can launch other agents via the agent-scoped `create_agent` MCP tool. Agent-scoped creation is always asynchronous and always stamps `paseo.parent-agent-id`, pointing back at the caller. Omit `workspaceId` to use the caller's workspace, or pass an existing workspace ID returned by `create_workspace`. Placement never changes parentage.
