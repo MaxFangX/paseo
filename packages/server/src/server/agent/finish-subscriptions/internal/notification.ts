@@ -43,6 +43,12 @@ export function formatFinishNotificationBody(params: FinishNotificationBodyInput
   const statusLine = `Agent ${params.childAgentId} (${params.title}) ${params.reason}.`;
   const sections = [statusLine];
   if (params.serverId) sections.push(`Server: ${params.serverId}`);
+  // PATCH(stop-notification): a canceled turn is a pause, not a result.
+  if (params.reason === "was canceled") {
+    sections.push(
+      "Its turn was interrupted, so any response below is partial. Treat its work as paused, not done; send a follow-up with `send_agent_prompt` when it should continue.",
+    );
+  }
   if (params.reason === "needs permission" && params.permissionRequest) {
     sections.push(
       "Respond with `respond_to_permission` using the `agentId` and `requestId` below.",
