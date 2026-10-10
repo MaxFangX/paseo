@@ -3099,6 +3099,17 @@ class ClaudeAgentSession implements AgentSession {
     }
   }
 
+  // PATCH(rewind-keeps-compaction): see rememberTranscriptProgress. In the transcript the summary
+  // is the entry flagged isCompactSummary; it carries no synthetic flag there, so it would
+  // otherwise register as a user anchor with no reply to fork through.
+  private rememberRewindHistoryAnchor(entry: Record<string, unknown>, uuid: string): void {
+    if (entry.isCompactSummary === true) {
+      this.rememberRewindAssistantAnchor(uuid);
+      return;
+    }
+    this.rememberRewindUserAnchor(uuid);
+  }
+
   private rememberTranscriptProgress(message: SDKMessage, messageId: string | null): void {
     if (!messageId) {
       return;
@@ -3108,6 +3119,14 @@ class ClaudeAgentSession implements AgentSession {
     // rewind throwing "Message <uuid> not found in session". The persisted history path already
     // skips sidechain entries; the live stream has to skip them too.
     if (readClaudeParentToolUseId(message)) {
+      return;
+    }
+    // PATCH(rewind-keeps-compaction): the compact summary is the last transcript entry a fork can
+    // cut after and still resume compacted, so it closes the open turn the way a reply does.
+    // Otherwise rewinding to the next prompt forks at the pre-compaction reply and the compaction
+    // is lost. Live, the summary is the synthetic user message streamed while compacting.
+    if (message.type === "user" && this.compacting && isSyntheticUserEntry(message)) {
+      this.rememberRewindAssistantAnchor(messageId);
       return;
     }
     if (
@@ -5115,7 +5134,7 @@ class ClaudeAgentSession implements AgentSession {
       !isToolResultUserEntry(entry);
     if (isVisibleUserEntry && typeof entry.uuid === "string") {
       this.rememberUserMessageId(entry.uuid);
-      this.rememberRewindUserAnchor(entry.uuid);
+      this.rememberRewindHistoryAnchor(entry, entry.uuid); // PATCH(rewind-keeps-compaction)
     }
     if (entry.type === "assistant" && typeof entry.uuid === "string") {
       this.rememberRewindAssistantAnchor(entry.uuid);
