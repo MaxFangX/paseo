@@ -17,22 +17,19 @@ import { CLIENT_SLASH_COMMANDS, type ClientSlashCommand } from "@/client-slash-c
 import type { PluginClientSlashCommand } from "@/plugins/client-slash-commands";
 import { mergeSlashCommandSources } from "@/plugins/client-slash-commands/model";
 import {
-  applySlashCommandReplacement,
   filterAndRankCommandAutocompleteEntries,
   filterInlineSkillCommandEntries,
   findActiveSlashCommand,
   type SlashCommandRange,
 } from "@/utils/agent-command-autocomplete";
-import {
-  applyFileMentionReplacement,
-  findActiveFileMention,
-  type FileMentionRange,
-} from "@/utils/file-mention-autocomplete";
+import { findActiveFileMention, type FileMentionRange } from "@/utils/file-mention-autocomplete";
+import { completeFileMention, completeSlashCommand } from "@/utils/autocomplete-completion"; // PATCH(autocomplete-caret)
 
 interface UseAgentAutocompleteInput {
   userInput: string;
   cursorIndex: number;
-  setUserInput: (nextValue: string) => void;
+  // PATCH(autocomplete-caret): the caret follows the completion instead of jumping to the end.
+  setUserInput: (nextValue: string, selection?: { start: number; end: number }) => void;
   serverId: string;
   agentId: string;
   draft?: DraftCommandTarget;
@@ -539,23 +536,25 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
           return;
         }
 
-        const nextInput = applySlashCommandReplacement({
+        // PATCH(autocomplete-caret)
+        const nextInput = completeSlashCommand({
           text: current.text,
           command: current.slashCommand,
           commandName: selected.id,
         });
-        setUserInput(nextInput);
+        setUserInput(nextInput.text, nextInput.selection);
         onAutocompleteApplied?.();
         return;
       }
 
       if (!current.fileMention) return;
-      const nextInput = applyFileMentionReplacement({
+      // PATCH(autocomplete-caret)
+      const nextInput = completeFileMention({
         text: current.text,
         mention: current.fileMention,
         relativePath: selected.entryPath,
       });
-      setUserInput(nextInput);
+      setUserInput(nextInput.text, nextInput.selection);
       onAutocompleteApplied?.();
     },
     [
