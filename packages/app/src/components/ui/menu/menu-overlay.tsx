@@ -356,12 +356,7 @@ export function AnchoredSurface({
   if (!open) return null;
 
   const measured = (
-    <View
-      collapsable={false}
-      onLayout={onContentLayout}
-      onPointerEnter={onPointerEnter}
-      onPointerLeave={onPointerLeave}
-    >
+    <View collapsable={false} onLayout={onContentLayout}>
       {children}
     </View>
   );
@@ -385,6 +380,9 @@ export function AnchoredSurface({
         nativeID={surfaceNativeID}
         testID={testID}
         dataSet={surfaceDataSet}
+        // PATCH(agent-move): on the surface rather than the content, so a scroll bar is inside it.
+        onPointerEnter={onPointerEnter}
+        onPointerLeave={onPointerLeave}
         style={styles.content}
         frameStyle={frameStyle}
         entering={placed ? contentEntering : undefined}
