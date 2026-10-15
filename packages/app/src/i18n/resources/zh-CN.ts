@@ -656,6 +656,8 @@ export const zhCN: TranslationResources = {
         moveAgent: "移动到工作区", // PATCH(agent-move)
         moveAgentEmpty: "没有其他工作区", // PATCH(agent-move)
         moveAgentFailed: "移动 Agent 失败", // PATCH(agent-move)
+        markAgentUnread: "标记为未读", // PATCH(agent-mark-unread)
+        markAgentUnreadFailed: "标记为未读失败", // PATCH(agent-mark-unread)
         reloadAgent: "重新加载 Agent",
         reloadAgentTooltip: "重新加载 Agent 以更新 skills、MCPs 或登录状态。",
         close: "关闭",

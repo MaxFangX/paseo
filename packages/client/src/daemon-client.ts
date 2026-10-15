@@ -3795,6 +3795,18 @@ export class DaemonClient {
     return payload;
   }
 
+  // PATCH(agent-mark-unread)
+  async markAgentUnread(agentId: string): Promise<void> {
+    const payload = await this.sendNamespacedCorrelatedSessionRequest<"agent.mark_unread.response">(
+      {
+        message: { type: "agent.mark_unread.request", agentId },
+      },
+    );
+    if (!payload.success) {
+      throw new Error(payload.error ?? "Failed to mark agent unread");
+    }
+  }
+
   // ============================================================================
   // Agent Interaction
   // ============================================================================

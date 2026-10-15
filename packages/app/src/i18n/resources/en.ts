@@ -653,6 +653,8 @@ export const en = {
         moveAgent: "Move to workspace", // PATCH(agent-move)
         moveAgentEmpty: "No other workspaces", // PATCH(agent-move)
         moveAgentFailed: "Failed to move agent", // PATCH(agent-move)
+        markAgentUnread: "Mark as unread", // PATCH(agent-mark-unread)
+        markAgentUnreadFailed: "Failed to mark as unread", // PATCH(agent-mark-unread)
         reloadAgent: "Reload agent",
         reloadAgentTooltip: "Reload agent to update skills, MCPs or login status.",
         close: "Close",

@@ -663,6 +663,8 @@ export const ru: TranslationResources = {
         moveAgent: "Переместить в рабочее пространство", // PATCH(agent-move)
         moveAgentEmpty: "Других рабочих пространств нет", // PATCH(agent-move)
         moveAgentFailed: "Не удалось переместить агента", // PATCH(agent-move)
+        markAgentUnread: "Отметить как непрочитанное", // PATCH(agent-mark-unread)
+        markAgentUnreadFailed: "Не удалось отметить как непрочитанное", // PATCH(agent-mark-unread)
         reloadAgent: "Перезагрузить агента",
         reloadAgentTooltip: "Перезагрузите агента, чтобы обновить навыки, MCP или статус входа.",
         close: "Закрыть",
