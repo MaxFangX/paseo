@@ -650,6 +650,8 @@ export const es: TranslationResources = {
         moveAgent: "Mover a espacio de trabajo", // PATCH(agent-move)
         moveAgentEmpty: "No hay otros espacios de trabajo", // PATCH(agent-move)
         moveAgentFailed: "No se pudo mover el agente", // PATCH(agent-move)
+        markAgentUnread: "Marcar como no leído", // PATCH(agent-mark-unread)
+        markAgentUnreadFailed: "No se pudo marcar como no leído", // PATCH(agent-mark-unread)
         reloadAgent: "Recargar agente",
         reloadAgentTooltip:
           "Vuelva a cargar el agente para actualizar habilidades, MCP o estado de inicio de sesión.",

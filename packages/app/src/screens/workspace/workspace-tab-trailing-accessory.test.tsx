@@ -47,6 +47,11 @@ vi.mock("@/screens/workspace/move-agent-menu", () => ({
   useMoveAgentMenuPages: () => [],
 }));
 
+// PATCH(agent-mark-unread): same reason.
+vi.mock("@/screens/workspace/mark-agent-unread-menu", () => ({
+  MarkAgentUnreadMenuItem: () => null,
+}));
+
 vi.mock("react-native-unistyles", () => ({
   StyleSheet: {
     create: (factory: unknown) =>

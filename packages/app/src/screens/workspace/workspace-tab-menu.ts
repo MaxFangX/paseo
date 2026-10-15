@@ -65,6 +65,14 @@ export type WorkspaceTabMenuEntry =
       tabId: string;
       testID: string;
     }
+  // PATCH(agent-mark-unread): rendered by the surfaces; see mark-agent-unread-menu.tsx.
+  | {
+      kind: "mark-unread";
+      key: string;
+      agentId: string;
+      tabId: string;
+      testID: string;
+    }
   | {
       kind: "separator";
       key: string;
@@ -323,6 +331,16 @@ export function buildWorkspaceTabMenuEntries(
       agentId: tab.target.agentId,
       tabId: tab.tabId,
       testID: `${menuTestIDBase}-move-agent`,
+    });
+  }
+  if (tab.target.kind === "agent") {
+    // PATCH(agent-mark-unread)
+    entries.push({
+      kind: "mark-unread",
+      key: "mark-unread",
+      agentId: tab.target.agentId,
+      tabId: tab.tabId,
+      testID: `${menuTestIDBase}-mark-unread`,
     });
   }
   entries.push({

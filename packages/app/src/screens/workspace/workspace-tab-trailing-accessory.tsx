@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { WorkspaceTabMenuEntry } from "@/screens/workspace/workspace-tab-menu";
 import { MoveAgentSubTrigger, useMoveAgentMenuPages } from "@/screens/workspace/move-agent-menu"; // PATCH(agent-move)
+import { MarkAgentUnreadMenuItem } from "@/screens/workspace/mark-agent-unread-menu"; // PATCH(agent-mark-unread)
 import type { Theme } from "@/styles/theme";
 
 const ThemedEllipsis = withUnistyles(Ellipsis);
@@ -93,6 +94,9 @@ function MobileTabMenuEntryItem({
 }) {
   if (entry.kind === "move-agent") {
     return <MoveAgentSubTrigger entry={entry} />;
+  }
+  if (entry.kind === "mark-unread") {
+    return <MarkAgentUnreadMenuItem entry={entry} />; // PATCH(agent-mark-unread)
   }
   return <MobileTabDropdownMenuItem entry={entry} />;
 }

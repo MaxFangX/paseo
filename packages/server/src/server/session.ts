@@ -2620,6 +2620,8 @@ export class Session {
         return this.handleAgentForkNativeRequest(msg);
       case "agent.move.request": // PATCH(agent-move)
         return this.handleAgentMoveRequest(msg);
+      case "agent.mark_unread.request": // PATCH(agent-mark-unread)
+        return this.handleAgentMarkUnreadRequest(msg);
       default:
         return undefined;
     }
@@ -8100,6 +8102,24 @@ export class Session {
       msg,
     );
     this.emit({ type: "agent.move.response", payload });
+  }
+
+  // PATCH(agent-mark-unread)
+  private async handleAgentMarkUnreadRequest(
+    msg: Extract<SessionInboundMessage, { type: "agent.mark_unread.request" }>,
+  ): Promise<void> {
+    const { requestId, agentId } = msg;
+    let error: string | null = null;
+    try {
+      await this.agentManager.markAgentUnread(agentId);
+    } catch (err) {
+      error = getErrorMessage(err);
+      this.sessionLogger.error({ err, agentId }, "Failed to mark agent unread");
+    }
+    this.emit({
+      type: "agent.mark_unread.response",
+      payload: { requestId, agentId, success: error === null, error },
+    });
   }
 
   // PATCH(native-fork)

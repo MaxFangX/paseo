@@ -1927,6 +1927,13 @@ export const AgentMoveRequestMessageSchema = z.object({
   requestId: z.string(),
 });
 
+// PATCH(agent-mark-unread): restore a finished, read agent's attention so it shows as unread.
+export const AgentMarkUnreadRequestMessageSchema = z.object({
+  type: z.literal("agent.mark_unread.request"),
+  agentId: z.string(),
+  requestId: z.string(),
+});
+
 export const SetAgentModeRequestMessageSchema = z.object({
   type: z.literal("set_agent_mode_request"),
   agentId: z.string(),
@@ -3292,6 +3299,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   AgentForkContextRequestMessageSchema,
   AgentForkNativeRequestMessageSchema, // PATCH(native-fork)
   AgentMoveRequestMessageSchema, // PATCH(agent-move)
+  AgentMarkUnreadRequestMessageSchema, // PATCH(agent-mark-unread)
   SetAgentModeRequestMessageSchema,
   SetAgentModelRequestMessageSchema,
   SetAgentThinkingRequestMessageSchema,
@@ -3683,6 +3691,8 @@ export const ServerInfoStatusPayloadSchema = z
         agentForkNative: z.boolean().optional(),
         // PATCH(agent-move): the daemon handles agent.move.request.
         agentMove: z.boolean().optional(),
+        // PATCH(agent-mark-unread): the daemon handles agent.mark_unread.request.
+        agentMarkUnread: z.boolean().optional(),
         // COMPAT(providerSubagents): added in v0.1.107, remove gate after 2027-01-12.
         providerSubagents: z.boolean().optional(),
         // COMPAT(projectedSubagentTimeline): added after v0.8.0, remove gates after 2027-03-14; retain wire field.
@@ -4857,6 +4867,17 @@ export const AgentMoveResponseMessageSchema = z.object({
     requestId: z.string(),
     agentId: z.string(),
     agent: AgentSnapshotPayloadSchema.nullable(),
+    error: z.string().nullable(),
+  }),
+});
+
+// PATCH(agent-mark-unread)
+export const AgentMarkUnreadResponseMessageSchema = z.object({
+  type: z.literal("agent.mark_unread.response"),
+  payload: z.object({
+    requestId: z.string(),
+    agentId: z.string(),
+    success: z.boolean(),
     error: z.string().nullable(),
   }),
 });
@@ -6951,6 +6972,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   AgentForkContextResponseMessageSchema,
   AgentForkNativeResponseMessageSchema, // PATCH(native-fork)
   AgentMoveResponseMessageSchema, // PATCH(agent-move)
+  AgentMarkUnreadResponseMessageSchema, // PATCH(agent-mark-unread)
   CancelAgentResponseMessageSchema,
   ClearAgentAttentionResponseMessageSchema,
   WorkspaceCreateResponseSchema,
@@ -7174,6 +7196,7 @@ export type AgentTimelineListPromptsResponseMessage = z.infer<
 export type AgentForkContextResponseMessage = z.infer<typeof AgentForkContextResponseMessageSchema>;
 export type AgentForkNativeResponseMessage = z.infer<typeof AgentForkNativeResponseMessageSchema>; // PATCH(native-fork)
 export type AgentMoveResponseMessage = z.infer<typeof AgentMoveResponseMessageSchema>; // PATCH(agent-move)
+export type AgentMarkUnreadResponseMessage = z.infer<typeof AgentMarkUnreadResponseMessageSchema>; // PATCH(agent-mark-unread)
 export type CancelAgentResponseMessage = z.infer<typeof CancelAgentResponseMessageSchema>;
 export type SendAgentMessageResponseMessage = z.infer<typeof SendAgentMessageResponseMessageSchema>;
 export type SetVoiceModeResponseMessage = z.infer<typeof SetVoiceModeResponseMessageSchema>;
@@ -7284,6 +7307,7 @@ export type FetchAgentRequestMessage = z.infer<typeof FetchAgentRequestMessageSc
 export type AgentForkContextRequestMessage = z.infer<typeof AgentForkContextRequestMessageSchema>;
 export type AgentForkNativeRequestMessage = z.infer<typeof AgentForkNativeRequestMessageSchema>; // PATCH(native-fork)
 export type AgentMoveRequestMessage = z.infer<typeof AgentMoveRequestMessageSchema>; // PATCH(agent-move)
+export type AgentMarkUnreadRequestMessage = z.infer<typeof AgentMarkUnreadRequestMessageSchema>; // PATCH(agent-mark-unread)
 export type SendAgentMessageRequest = z.infer<typeof SendAgentMessageRequestSchema>;
 export type WaitForFinishRequest = z.infer<typeof WaitForFinishRequestSchema>;
 export type DictationStreamStartMessage = z.infer<typeof DictationStreamStartMessageSchema>;

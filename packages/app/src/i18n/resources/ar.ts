@@ -644,6 +644,8 @@ export const ar: TranslationResources = {
         moveAgent: "نقل إلى مساحة عمل", // PATCH(agent-move)
         moveAgentEmpty: "لا توجد مساحات عمل أخرى", // PATCH(agent-move)
         moveAgentFailed: "فشل نقل الوكيل", // PATCH(agent-move)
+        markAgentUnread: "وضع علامة كغير مقروء", // PATCH(agent-mark-unread)
+        markAgentUnreadFailed: "فشل وضع علامة كغير مقروء", // PATCH(agent-mark-unread)
         reloadAgent: "إعادة تحميل الوكيل",
         reloadAgentTooltip: "قم بإعادة تحميل الوكيل لتحديث المهارات أو MCPs أو حالة تسجيل الدخول.",
         close: "يغلق",

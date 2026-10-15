@@ -63,6 +63,7 @@ import {
   type WorkspaceTabMenuLabels,
 } from "@/screens/workspace/workspace-tab-menu";
 import { MoveAgentSubTrigger, useMoveAgentMenuPages } from "@/screens/workspace/move-agent-menu"; // PATCH(agent-move)
+import { MarkAgentUnreadMenuItem } from "@/screens/workspace/mark-agent-unread-menu"; // PATCH(agent-mark-unread)
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import type { PaneHost } from "@/panels/panel-manifest";
 import type { WorkspaceTabLaunchPurpose } from "@/workspace-tabs/launcher";
@@ -462,6 +463,9 @@ function TabMenuEntryItem({
 }) {
   if (entry.kind === "move-agent") {
     return <MoveAgentSubTrigger entry={entry} />;
+  }
+  if (entry.kind === "mark-unread") {
+    return <MarkAgentUnreadMenuItem entry={entry} />; // PATCH(agent-mark-unread)
   }
   return <TabContextMenuItem entry={entry} />;
 }

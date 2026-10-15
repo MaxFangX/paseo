@@ -645,6 +645,8 @@ export const ko: TranslationResources = {
         moveAgent: "워크스페이스로 이동", // PATCH(agent-move)
         moveAgentEmpty: "다른 워크스페이스가 없습니다", // PATCH(agent-move)
         moveAgentFailed: "에이전트를 이동하지 못했습니다", // PATCH(agent-move)
+        markAgentUnread: "읽지 않음으로 표시", // PATCH(agent-mark-unread)
+        markAgentUnreadFailed: "읽지 않음으로 표시하지 못했습니다", // PATCH(agent-mark-unread)
         reloadAgent: "에이전트 다시 로드",
         reloadAgentTooltip:
           "스킬, MCP 또는 로그인 상태를 업데이트하려면 에이전트를 다시 로드하세요.",

@@ -649,6 +649,8 @@ export const fr: TranslationResources = {
         moveAgent: "Déplacer vers un espace de travail", // PATCH(agent-move)
         moveAgentEmpty: "Aucun autre espace de travail", // PATCH(agent-move)
         moveAgentFailed: "Impossible de déplacer l’agent", // PATCH(agent-move)
+        markAgentUnread: "Marquer comme non lu", // PATCH(agent-mark-unread)
+        markAgentUnreadFailed: "Échec du marquage comme non lu", // PATCH(agent-mark-unread)
         reloadAgent: "Recharger l’agent",
         reloadAgentTooltip:
           "Rechargez l’agent pour mettre à jour les skills, les MCP ou l’état de connexion.",

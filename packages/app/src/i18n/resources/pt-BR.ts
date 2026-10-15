@@ -649,6 +649,8 @@ export const ptBR: TranslationResources = {
         moveAgent: "Mover para workspace", // PATCH(agent-move)
         moveAgentEmpty: "Não há outros workspaces", // PATCH(agent-move)
         moveAgentFailed: "Falha ao mover o agente", // PATCH(agent-move)
+        markAgentUnread: "Marcar como não lido", // PATCH(agent-mark-unread)
+        markAgentUnreadFailed: "Falha ao marcar como não lido", // PATCH(agent-mark-unread)
         reloadAgent: "Recarregar agente",
         reloadAgentTooltip: "Recarregue o agente para atualizar skills, MCPs ou status de login.",
         close: "Fechar",
