@@ -85,6 +85,8 @@ export function useMoveAgentMenuPages(
       {
         id: MOVE_AGENT_PAGE_ID,
         title: t("workspace.tabs.menu.moveAgent"),
+        // A host can have more workspaces than fit on screen.
+        scrollable: true,
         content: (
           <MoveAgentPage
             serverId={home.serverId}

@@ -78,6 +78,8 @@ export interface MenuPageDefinition {
    * surface stops closing on hover, since its parent leads back to the same dismissal.
    */
   hoverIntent?: boolean;
+  /** PATCH(agent-move): Scroll this page's flyout even when the root surface doesn't. */
+  scrollable?: boolean;
 }
 
 interface MenuSurfaceContextValue {
@@ -330,7 +332,7 @@ function MenuFlyout({
       offset={-SUBMENU_OVERLAP}
       minWidth={minWidth}
       maxHeight={maxHeight}
-      scrollable={scrollable}
+      scrollable={page.scrollable ?? scrollable} // PATCH(agent-move)
       backdrop={false}
       revision={page.id}
       onPointerEnter={cancelHoverClose}
