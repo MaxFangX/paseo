@@ -3,6 +3,7 @@ import { createStore, type StoreApi } from "zustand/vanilla";
 import { useStore } from "zustand";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { beginQueuedSendNow } from "./send-now-hold"; // PATCH(send-now-hold)
+import { useQueueKeyboardNav, type QueueKeyboardNav } from "./queue-keyboard-nav"; // PATCH(queue-arrow-nav)
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
   View,
@@ -365,6 +366,7 @@ interface RenderQueueTrackArgs {
   handleSendQueuedNow: (id: string) => Promise<void>;
   editLabel: string;
   sendNowLabel: string;
+  queueTrackRef: QueueKeyboardNav["trackRef"]; // PATCH(queue-arrow-nav)
 }
 
 function renderQueueTrack(args: RenderQueueTrackArgs): ReactElement | null {
@@ -372,7 +374,7 @@ function renderQueueTrack(args: RenderQueueTrackArgs): ReactElement | null {
     args;
   if (queuedMessages.length === 0) return null;
   return (
-    <View style={styles.queueTrack}>
+    <View ref={args.queueTrackRef} style={styles.queueTrack}>
       {queuedMessages.map((item) => (
         <QueuedMessageRow
           key={item.id}
@@ -676,7 +678,7 @@ function QueuedMessageRow({
       <View style={styles.queueActions}>
         <Pressable
           onPress={handleEdit}
-          style={styles.queueActionButton}
+          style={queueEditButtonStyle} // PATCH(queue-arrow-nav)
           accessibilityLabel={editLabel}
           accessibilityRole="button"
         >
@@ -684,7 +686,7 @@ function QueuedMessageRow({
         </Pressable>
         <Pressable
           onPress={handleSendNow}
-          style={[styles.queueActionButton, styles.queueSendButton]}
+          style={queueSendButtonStyle} // PATCH(queue-arrow-nav)
           accessibilityLabel={sendNowLabel}
           accessibilityRole="button"
         >
@@ -1958,10 +1960,13 @@ function ComposerContentImpl({
 
   const hasSendableContent = hasText || selectedAttachments.length > 0;
 
+  const queueKeyboardNav = useQueueKeyboardNav(focusInput); // PATCH(queue-arrow-nav)
+
   // Handle keyboard navigation for command autocomplete.
   const handleCommandKeyPress = useCallback(
-    (event: ComposerKeyPressEvent) => autocompleteRef.current?.onKeyPress(event) ?? false,
-    [],
+    (event: ComposerKeyPressEvent) =>
+      (autocompleteRef.current?.onKeyPress(event) ?? false) || queueKeyboardNav.onKeyPress(event), // PATCH(queue-arrow-nav)
+    [queueKeyboardNav],
   );
 
   const cancelButtonStyle = useMemo(
@@ -2296,8 +2301,9 @@ function ComposerContentImpl({
         handleSendQueuedNow,
         editLabel: t("composer.attachments.editQueuedMessage"),
         sendNowLabel: t("composer.attachments.sendQueuedMessageNow"),
+        queueTrackRef: queueKeyboardNav.trackRef, // PATCH(queue-arrow-nav)
       }),
-    [handleEditQueuedMessage, handleSendQueuedNow, queuedMessages, t],
+    [handleEditQueuedMessage, handleSendQueuedNow, queueKeyboardNav, queuedMessages, t],
   );
 
   const autocompleteConfiguration = useMemo(
@@ -2603,11 +2609,26 @@ const styles = StyleSheet.create((theme: Theme) => ({
   queueSendButton: {
     backgroundColor: theme.colors.accent,
   },
+  // PATCH(queue-arrow-nav): focus ring while arrow keys walk the queue buttons.
+  queueActionButtonFocused: {
+    outlineColor: theme.colors.accent,
+    outlineOffset: 1,
+    outlineStyle: "solid",
+    outlineWidth: 2,
+  },
   sendErrorText: {
     color: theme.colors.palette.red[500],
     fontSize: theme.fontSize.base,
   },
 })) as unknown as Record<string, object>;
+
+// PATCH(queue-arrow-nav): ring a queue button while keyboard focus rests on it.
+function queueActionStyle(base: object[]) {
+  return ({ focused }: PressableStateCallbackType & { focused?: boolean }) =>
+    focused ? [...base, styles.queueActionButtonFocused] : base;
+}
+const queueEditButtonStyle = queueActionStyle([styles.queueActionButton]);
+const queueSendButtonStyle = queueActionStyle([styles.queueActionButton, styles.queueSendButton]);
 
 const ThemedAttachmentSpinner = withUnistyles(LoadingSpinner);
 const ThemedPencil = withUnistyles(Pencil);
