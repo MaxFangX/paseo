@@ -10,6 +10,10 @@
 #   --draft          Publish the GitHub release as a draft
 #   --skip-build     Reuse packages/desktop/release/mac-arm64/Paseo.app from a prior run
 #
+# A published release deletes packages/desktop/release afterwards: the dmg and
+# zip live on GitHub, and a ~900MB .app per release worktree adds up. Dry runs
+# and failed publishes keep it for inspection and for --skip-build retries.
+#
 # The release (and its tag) is named maxfangx-<branch>-<YYYY_MM_DD> (UTC date).
 # A leading "maxfangx-" on the branch is not doubled, so branch
 # maxfangx-v0.4.0-beta.2 releases as maxfangx-v0.4.0-beta.2-<date>.
@@ -53,8 +57,9 @@ RELEASE_NAME="maxfangx-${BRANCH#maxfangx-}-$(date -u +%Y_%m_%d)"
 RELEASE_NAME="${RELEASE_NAME//\//-}"
 COMMIT="$(git rev-parse "${COMMIT:-HEAD}")"
 
-APP="packages/desktop/release/mac-arm64/Paseo.app"
-OUT_DIR="packages/desktop/release/fork"
+RELEASE_DIR="packages/desktop/release"
+APP="$RELEASE_DIR/mac-arm64/Paseo.app"
+OUT_DIR="$RELEASE_DIR/fork"
 DMG="$OUT_DIR/Paseo-$RELEASE_NAME-arm64.dmg"
 ZIP="$OUT_DIR/Paseo-$RELEASE_NAME-arm64.zip"
 
@@ -136,5 +141,8 @@ else
     --notes "$NOTES" \
     ${draft_flag[@]+"${draft_flag[@]}"} # macOS bash 3.2 + set -u: empty "${a[@]}" is unbound
 fi
+
+echo "==> Removing build output ($RELEASE_DIR); the assets are on GitHub"
+rm -rf "$RELEASE_DIR"
 
 echo "==> Done: https://github.com/$REPO/releases/tag/$RELEASE_NAME"

@@ -57,3 +57,29 @@ the commit entirely once nothing worth keeping remains. The same applies when
 rebasing `main` onto upstream. This already happened once: the relay
 low-order-key fix was superseded by upstream's own version (PR #3669, first
 shipped in 0.5.0) and was eventually dropped from the fork.
+
+## After the release
+
+Install it and retire what the release leaves behind. Nothing here can break
+the running app: home-manager's `copyApps` installs a real copy under
+`~/Applications/Home Manager Apps`, so the live process holds no file in a
+worktree or the nix store.
+
+```bash
+cd ~/.dotfiles && just update paseo-app && hms   # pin the new tag, install
+```
+
+Relaunch Paseo at a quiet moment. Until then the window still runs the bundle
+it loaded at launch while the daemon has already picked up the new files; the
+relaunch restarts the daemon on 6767 and every agent it manages.
+
+Once the new build is running, remove the previous release's worktree. Its
+branch, tag, and zip stay on GitHub:
+
+```bash
+just -g workspace remove ~/dev/workspaces/maxfangx-vOLD
+```
+
+The script already deletes its ~900MB of build output after publishing. Old
+builds in the nix store are freed by expiring home-manager generations and
+running `nix-collect-garbage`.
