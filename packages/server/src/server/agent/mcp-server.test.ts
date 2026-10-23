@@ -2815,6 +2815,53 @@ describe("create_agent MCP tool", () => {
     await rm(baseDir, { recursive: true, force: true });
   });
 
+  // PATCH(create-agent-cwd)
+  it("lets caller agents run a subagent in its own directory inside their workspace", async () => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    const baseDir = await mkdtemp(join(tmpdir(), "paseo-create-agent-cwd-"));
+    const subdir = join(baseDir, "worker");
+    await mkdir(subdir);
+    spies.agentManager.getAgent.mockReturnValue({
+      id: "parent-agent",
+      config: {},
+      cwd: baseDir,
+      workspaceId: "wks_parent",
+      provider: "codex",
+      currentModeId: "full-access",
+    } as ManagedAgent);
+    spies.agentManager.createAgent.mockResolvedValue({
+      id: "child-agent",
+      cwd: subdir,
+      lifecycle: "idle",
+      currentModeId: null,
+      availableModes: [],
+      config: { title: "Child" },
+    } as ManagedAgent);
+
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createOpenCodeManager().manager,
+      callerAgentId: "parent-agent",
+      logger,
+    });
+
+    const tool = registeredTool(server, "create_agent");
+    await tool.handler({
+      title: "Child",
+      provider: "codex/gpt-5.4",
+      initialPrompt: "Do work",
+      cwd: "worker",
+    });
+
+    expect(spies.agentManager.createAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: subdir }),
+      undefined,
+      expect.objectContaining({ workspaceId: "wks_parent" }),
+    );
+    await rm(baseDir, { recursive: true, force: true });
+  });
+
   it("rejects background from caller agents and defaults notify-on-finish on", async () => {
     const { agentManager, agentStorage, spies } = createTestDeps();
     spies.agentManager.getAgent.mockReturnValue({
