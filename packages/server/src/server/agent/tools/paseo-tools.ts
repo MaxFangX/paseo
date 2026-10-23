@@ -1037,6 +1037,14 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
   };
   const agentToAgentInputSchema = {
     ...canonicalCreateAgentFields,
+    // PATCH(create-agent-cwd): a worker that owns its own jj workspace or worktree can stay in
+    // the caller's Paseo workspace instead of registering one of its own.
+    cwd: z
+      .string()
+      .optional()
+      .describe(
+        "Working directory for the agent. Defaults to the workspace directory. Set it to run a subagent in its own checkout without registering a separate workspace.",
+      ),
     notifyOnFinish: z
       .boolean()
       .optional()
@@ -1576,7 +1584,11 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
 
   async function resolveCreateAgentToolArgs(args: unknown): Promise<ResolvedCreateAgentToolArgs> {
     if (callerAgentId) {
-      if (hasLegacyCreateAgentPlacement(args)) {
+      // PATCH(create-agent-cwd): a bare `cwd` is canonical for callers; only the nested
+      // relationship/workspace pair marks the legacy shape, which requires both anyway.
+      const input = args as Record<string, unknown>;
+      const hasNestedPlacement = input.relationship !== undefined || input.workspace !== undefined;
+      if (hasNestedPlacement) {
         // COMPAT(nestedCreateAgentPlacement): accept the old relationship/workspace shape without
         // advertising it to models. Added in v0.2.0; remove after 2027-01-17.
         const parsed = legacyAgentToAgentCreateAgentArgsSchema.parse(args);
@@ -1600,7 +1612,8 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
         kind: "agent-scoped",
         parsedArgs: parsed,
         detached: false,
-        cwd,
+        // PATCH(create-agent-cwd): createAgentCommand resolves it against the caller's locks.
+        cwd: parsed.cwd?.trim() ? parsed.cwd : cwd,
         workspaceId,
         worktree: undefined,
       };

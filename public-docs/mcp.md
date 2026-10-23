@@ -78,6 +78,7 @@ Workspaces decide where work happens; agent parentage decides who owns the work.
 
 - An agent that calls `create_agent` without a `workspaceId` gets a subagent in its own workspace.
 - Passing a `workspaceId` places that subagent in another workspace without detaching it from its parent.
+- Passing a `cwd` runs the subagent in another directory, such as a jj workspace or worktree the caller made itself, while it stays in the caller's workspace. <!-- PATCH(create-agent-cwd) -->
 - A top-level MCP caller without a workspace gets a new local workspace.
 - Create a workspace first when you need worktree isolation, a specific branch, or a pull request checkout.
 
