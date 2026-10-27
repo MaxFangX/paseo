@@ -5,6 +5,11 @@ Personal builds of the desktop app, published as GitHub Releases on
 only for now. Builds are ad-hoc signed (no Developer ID cert), so recipients
 must right-click → Open on first launch; the release notes say so.
 
+Each release also ships `getpaseo-*.tgz`: the seven npm packages behind the
+`paseo` CLI and daemon (`scripts/fork/pack-cli.sh`), built from the same
+commit. ~/.dotfiles builds `paseo` from them on every host, so hosts without
+the app (Linux) also run the fork rather than upstream's npm release.
+
 Releases are named `maxfangx-<branch>-<YYYY_MM_DD>` (UTC). A leading
 `maxfangx-` on the branch is not doubled: branch `main` releases as
 `maxfangx-main-2026_08_13`, branch `maxfangx-v0.4.0` as
@@ -66,7 +71,7 @@ the running app: home-manager's `copyApps` installs a real copy under
 worktree or the nix store.
 
 ```bash
-cd ~/.dotfiles && just update paseo-app && hms   # pin the new tag, install
+cd ~/.dotfiles && just update paseo && hms   # pin the new tag, install
 ```
 
 Relaunch Paseo at a quiet moment. Until then the window still runs the bundle
