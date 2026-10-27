@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # Fork-only (maxfangx): build an unsigned production macOS arm64 desktop app
-# and publish it to GitHub Releases on the fork.
+# and publish it to GitHub Releases on the fork, along with tarballs of the
+# CLI's npm packages (see pack-cli.sh).
 #
 # Usage: scripts/fork/release-macos-arm64.sh [options]
 #   --branch <name>  Branch the release is named after (default: current git branch)
@@ -109,6 +110,10 @@ ln -s /Applications "$STAGING/Applications"
 hdiutil create -volname Paseo -srcfolder "$STAGING" -ov -format UDZO "$DMG"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 
+echo "==> Packing the CLI's npm packages"
+./scripts/fork/pack-cli.sh "$OUT_DIR"
+ASSETS=("$DMG" "$ZIP" "$OUT_DIR"/*.tgz)
+
 if [[ "$DRY_RUN" == 1 ]]; then
   echo "==> Dry run: skipping publish. Artifacts in $OUT_DIR"
   exit 0
@@ -117,7 +122,10 @@ fi
 NOTES="Unsigned personal build of Paseo from branch \`$BRANCH\` at $COMMIT.
 
 macOS blocks the first launch of unsigned apps: right-click Paseo.app and
-choose Open, or run \`xattr -dr com.apple.quarantine /Applications/Paseo.app\`."
+choose Open, or run \`xattr -dr com.apple.quarantine /Applications/Paseo.app\`.
+
+The \`getpaseo-*.tgz\` assets are the npm packages behind the \`paseo\` CLI
+and daemon, built from the same commit, for hosts without the app."
 
 echo "==> Publishing $RELEASE_NAME to $REPO"
 # The release tags $COMMIT on GitHub, which fails with an opaque 422 when the
@@ -128,13 +136,13 @@ if ! gh api "repos/$REPO/commits/$COMMIT" --silent 2> /dev/null; then
 fi
 if gh release view "$RELEASE_NAME" --repo "$REPO" > /dev/null 2>&1; then
   echo "release already exists; replacing assets"
-  gh release upload "$RELEASE_NAME" "$DMG" "$ZIP" --clobber --repo "$REPO"
+  gh release upload "$RELEASE_NAME" "${ASSETS[@]}" --clobber --repo "$REPO"
 else
   draft_flag=()
   if [[ "$DRAFT" == 1 ]]; then
     draft_flag=(--draft)
   fi
-  gh release create "$RELEASE_NAME" "$DMG" "$ZIP" \
+  gh release create "$RELEASE_NAME" "${ASSETS[@]}" \
     --repo "$REPO" \
     --target "$COMMIT" \
     --title "$RELEASE_NAME" \
