@@ -86,6 +86,7 @@ import {
   type ClaudeRewindSdk,
 } from "./rewind.js";
 import { forkClaudeConversation, moveClaudeTranscript } from "./native-fork.js"; // PATCH(native-fork) PATCH(agent-move)
+import { buildClaudePermissionReason } from "./permission-reason.js"; // PATCH(claude-permission-reason)
 import { normalizeProviderReplayTimestamp } from "../../provider-history-timestamps.js";
 import { claudeConfigDir, claudeProjectDirSync, claudeTranscriptPathSync } from "./project-dir.js";
 import { THINKING_APPLIES_NEXT_TURN_NOTICE } from "../../provider-notices.js";
@@ -5216,6 +5217,7 @@ class ClaudeAgentSession implements AgentSession {
       name: toolName,
       kind,
       ...buildClaudeQuestionPermissionSummary(toolName, input),
+      ...buildClaudePermissionReason({ kind, decisionReason: options.decisionReason }), // PATCH(claude-permission-reason)
       input: requestInput,
       detail: toolDetail,
       suggestions: options.suggestions?.map((suggestion) => ({
