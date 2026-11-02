@@ -80,6 +80,7 @@ import {
   type TurnContentStrategy,
 } from "./turn-footer";
 import { resolveBottomOverlayTailInset } from "./bottom-overlay-inset";
+import { resolveLatestTurnThoughtIds } from "./latest-turn-thoughts"; // PATCH(expand-latest-reasoning)
 import { layoutStream, type StreamLayoutItem } from "./layout";
 import {
   type BottomAnchorLocalRequest,
@@ -573,6 +574,11 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         streamRenderStrategy,
       ],
     );
+    // PATCH(expand-latest-reasoning): auto-expand applies to the latest turn only.
+    const latestTurnThoughtIds = useMemo(
+      () => resolveLatestTurnThoughtIds([...presentation.tail, ...presentation.head]),
+      [presentation.head, presentation.tail],
+    );
     const handleTimelineHistoryLoadError = useCallback(() => {
       toast?.error(t("agentStream.historyLoadFailed"));
     }, [t, toast]);
@@ -728,11 +734,11 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             text={item.text}
             status={item.status}
             isLastInSequence={layoutItem.isLastInToolSequence}
-            defaultExpanded={autoExpandReasoning}
+            defaultExpanded={autoExpandReasoning && latestTurnThoughtIds.has(item.id)} // PATCH(expand-latest-reasoning)
           />
         );
       },
-      [autoExpandReasoning, setInlineDetailsExpanded],
+      [autoExpandReasoning, latestTurnThoughtIds, setInlineDetailsExpanded],
     );
 
     const renderSingleToolCallItem = useCallback(

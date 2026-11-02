@@ -2250,6 +2250,11 @@ export const ToolCall = memo(function ToolCall({
 }: ToolCallProps) {
   const { openToolCall } = useToolCallSheet();
   const [isExpanded, setIsExpanded] = useState(defaultExpanded ?? false);
+  // PATCH(expand-latest-reasoning): follow the default when it changes, so a reasoning row
+  // auto-expanded for the latest turn collapses once the next turn starts.
+  useEffect(() => {
+    setIsExpanded(defaultExpanded ?? false);
+  }, [defaultExpanded]);
 
   const isMobile = useIsCompactFormFactor();
   const shouldRenderInline = !isMobile || forceInline;
