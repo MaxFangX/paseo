@@ -4782,6 +4782,26 @@ describe("HostRuntimeStore initial connection hint bootstrap", () => {
 
 // PATCH(send-now-hold): a send-now in flight holds the rest of the agent's queue.
 describe("send-now hold", () => {
+  function setDrainQueue(serverId: string): void {
+    useSessionStore.getState().setQueuedMessages(
+      serverId,
+      new Map([
+        [
+          "agent",
+          [
+            { id: "first", text: "message one", attachments: [] },
+            { id: "second", text: "message two", attachments: [] },
+          ],
+        ],
+      ]),
+    );
+  }
+
+  /** Flushes the drain's promise chain, including the `finally` that settles its hold. */
+  function flush(): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
   it("holds the queue drain until the send-now settles", async () => {
     const host = makeHost({ serverId: "srv_send_now_hold" });
     const fakeClient = new FakeDaemonClient();
@@ -4822,6 +4842,95 @@ describe("send-now hold", () => {
     hold!.settle(false);
     await fakeClient.waitForSentMessages(1);
     expect(fakeClient.sentAgentMessages).toHaveLength(1);
+    useSessionStore.getState().clearSession(host.serverId);
+  });
+
+  it("holds the queue while the drained message's turn is still opening", async () => {
+    const host = makeHost({ serverId: "srv_drain_hold_opening" });
+    const fakeClient = new FakeDaemonClient();
+    const store = new HostRuntimeStore({
+      deps: {
+        createClient: () => fakeClient as unknown as DaemonClient,
+        connectToDaemon: async () => ({
+          client: fakeClient as unknown as DaemonClient,
+          serverId: host.serverId,
+          hostname: null,
+        }),
+        getClientId: async () => "cid_drain_hold_opening",
+      },
+    });
+    useSessionStore
+      .getState()
+      .initializeSession(host.serverId, fakeClient as unknown as DaemonClient, 1);
+    setDrainQueue(host.serverId);
+
+    store.drainQueuedAgentMessage(host.serverId, "agent");
+    await fakeClient.waitForSentMessages(1);
+    // The send has acked and the in-flight guard has cleared, but the daemon has not opened
+    // message one's turn, so the agent still reads idle — the window this hold exists for.
+    await flush();
+
+    store.drainQueuedAgentMessage(host.serverId, "agent");
+    await flush();
+
+    // Message two must not be dispatched here: the daemon would steer it into message one's
+    // turn, where the agent answers the first and never addresses the second.
+    expect(fakeClient.sentAgentMessages.map((sent) => sent[1])).toEqual(["message one"]);
+    expect(
+      useSessionStore
+        .getState()
+        .sessions[host.serverId]?.queuedMessages.get("agent")
+        ?.map((message) => message.id),
+    ).toEqual(["second"]);
+    useSessionStore.getState().clearSession(host.serverId);
+  });
+
+  it("releases the drain hold once the turn opens and sends the next message after it", async () => {
+    const host = makeHost({ serverId: "srv_drain_hold_release" });
+    const fakeClient = new FakeDaemonClient();
+    const store = new HostRuntimeStore({
+      deps: {
+        createClient: () => fakeClient as unknown as DaemonClient,
+        connectToDaemon: async () => ({
+          client: fakeClient as unknown as DaemonClient,
+          serverId: host.serverId,
+          hostname: null,
+        }),
+        getClientId: async () => "cid_drain_hold_release",
+      },
+    });
+    const sessionStore = useSessionStore.getState();
+    sessionStore.initializeSession(host.serverId, fakeClient as unknown as DaemonClient, 1);
+    setDrainQueue(host.serverId);
+    const entry = makeFetchAgentsEntry({
+      id: "agent",
+      cwd: "/repo",
+      updatedAt: "2026-11-02T10:00:00.000Z",
+    });
+    const withTurn = (turn: Agent["turn"]): Map<string, Agent> =>
+      new Map([["agent", { ...replicaAgent(entry.agent, host.serverId), turn }]]);
+
+    store.drainQueuedAgentMessage(host.serverId, "agent");
+    await fakeClient.waitForSentMessages(1);
+    await flush();
+
+    // Message one's turn opens: the hold has seen its new turn and lets go without draining.
+    sessionStore.setAgents(
+      host.serverId,
+      withTurn({ phase: "open", turnId: "turn-1", startedAt: null, cancellationRequestId: null }),
+    );
+    await flush();
+    expect(fakeClient.sentAgentMessages).toHaveLength(1);
+
+    // That turn ends, and message two gets a turn of its own.
+    sessionStore.setAgents(host.serverId, withTurn({ phase: "idle", cancellationRequestId: null }));
+    store.drainQueuedAgentMessage(host.serverId, "agent");
+    await fakeClient.waitForSentMessages(2);
+
+    expect(fakeClient.sentAgentMessages.map((sent) => sent[1])).toEqual([
+      "message one",
+      "message two",
+    ]);
     useSessionStore.getState().clearSession(host.serverId);
   });
 });

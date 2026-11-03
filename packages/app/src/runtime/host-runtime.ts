@@ -91,7 +91,7 @@ import { projectIconCache } from "@/projects/icon-cache";
 import { createPerformanceTrace } from "@/performance/native-trace";
 import { revokePushNotifications } from "@/push-notifications";
 import { createAppWebSocketFactory } from "./websocket-factory";
-import { isQueueDrainHeld } from "@/composer/send-now-hold"; // PATCH(send-now-hold)
+import { beginQueuedSendNow, isQueueDrainHeld } from "@/composer/send-now-hold"; // PATCH(send-now-hold)
 
 export type HostRuntimeConnectionStatus = "idle" | "connecting" | "online" | "offline" | "error";
 export type PairingNavigationTarget = "openProject" | "hostRoot" | "hostSettings";
@@ -2570,6 +2570,22 @@ export class HostRuntimeStore {
     }
     this.queuedAgentDrainInFlight.add(drainKey);
     const next = queue[0];
+    // PATCH(send-now-hold): the dispatched message's turn is not open yet when its send acks, so
+    // the agent still reads as idle. Without a hold the next drain trigger fires in that window
+    // and the daemon steers message two into message one's turn, where the agent answers the
+    // first and never addresses the second.
+    let sent = false;
+    const hold = beginQueuedSendNow({
+      serverId,
+      agentId,
+      expectsNewTurn: true,
+      // Reached when no turn ever opened, or when the send failed. Resume the queue only in the
+      // first case: a failed send leaves its message at the head, and draining it again here
+      // would retry it in a tight loop.
+      catchUp: () => {
+        if (sent) this.drainQueuedAgentMessage(serverId, agentId);
+      },
+    });
     void sendQueuedComposerMessageNow({
       agentId,
       messageId: next.id,
@@ -2600,6 +2616,7 @@ export class HostRuntimeStore {
       },
     })
       .then((result) => {
+        sent = result.status === "submitted";
         if (result.status === "failed") {
           console.error("[HostRuntime] failed to drain queued agent message", {
             serverId,
@@ -2611,6 +2628,9 @@ export class HostRuntimeStore {
       })
       .finally(() => {
         this.queuedAgentDrainInFlight.delete(drainKey);
+        // PATCH(send-now-hold): settle after the in-flight key clears, so a release that drains
+        // the next message is not turned away by the guard above.
+        hold?.settle(sent);
       });
   }
 
