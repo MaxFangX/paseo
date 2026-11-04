@@ -2292,6 +2292,17 @@ export const ko: TranslationResources = {
         label: "추론 항상 펼치기",
         description: "에이전트의 사고 및 추론 블록을 기본적으로 모두 펼쳐 표시합니다.",
       },
+      // PATCH(expand-latest-reasoning)
+      reasoningExpansion: {
+        label: "추론 펼치기",
+        description:
+          "어떤 사고 블록을 펼쳐서 표시할지 선택합니다. 최신 턴의 블록은 다음 메시지로 새 턴이 시작되면 접힙니다.",
+        options: {
+          always: "모든 턴",
+          latestTurn: "최신 턴만",
+          never: "펼치지 않음",
+        },
+      },
       toolCallDetail: {
         label: "도구 호출 표시",
         description: "타임라인에 도구 호출이 표시되는 방식",

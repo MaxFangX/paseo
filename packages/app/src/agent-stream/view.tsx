@@ -333,7 +333,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     ref,
   ) {
     const { t } = useTranslation();
-    const autoExpandReasoning = useSettings((settings) => settings.autoExpandReasoning);
+    const reasoningExpansion = useSettings((settings) => settings.reasoningExpansion); // PATCH(expand-latest-reasoning)
     const toolCallDetailLevel = useSettings((settings) => settings.toolCallDetailLevel);
     const chatOutlineEnabled = useSettings((settings) => settings.chatOutlineEnabled);
     const contentMaxWidth = useSettings(resolveContentMaxWidth);
@@ -734,11 +734,15 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             text={item.text}
             status={item.status}
             isLastInSequence={layoutItem.isLastInToolSequence}
-            defaultExpanded={autoExpandReasoning && latestTurnThoughtIds.has(item.id)} // PATCH(expand-latest-reasoning)
+            // PATCH(expand-latest-reasoning)
+            defaultExpanded={
+              reasoningExpansion === "always" ||
+              (reasoningExpansion === "latestTurn" && latestTurnThoughtIds.has(item.id))
+            }
           />
         );
       },
-      [autoExpandReasoning, latestTurnThoughtIds, setInlineDetailsExpanded],
+      [latestTurnThoughtIds, reasoningExpansion, setInlineDetailsExpanded],
     );
 
     const renderSingleToolCallItem = useCallback(

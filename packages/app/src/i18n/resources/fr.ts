@@ -2331,6 +2331,17 @@ export const fr: TranslationResources = {
         label: "Toujours afficher le raisonnement",
         description: "Afficher par défaut le raisonnement de l’agent entièrement déplié",
       },
+      // PATCH(expand-latest-reasoning)
+      reasoningExpansion: {
+        label: "Déplier le raisonnement",
+        description:
+          "Quels blocs de raisonnement de l’agent s’affichent dépliés. Ceux du dernier tour se replient quand votre prochain message démarre un nouveau tour.",
+        options: {
+          always: "À chaque tour",
+          latestTurn: "Dernier tour uniquement",
+          never: "Jamais",
+        },
+      },
       toolCallDetail: {
         label: "Affichage des appels d’outils",
         description: "Comment les appels d’outils apparaissent dans la chronologie",

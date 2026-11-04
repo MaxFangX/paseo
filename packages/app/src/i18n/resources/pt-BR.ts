@@ -2316,6 +2316,17 @@ export const ptBR: TranslationResources = {
         description:
           "Mostrar os blocos de pensamento e raciocínio do agente totalmente expandidos por padrão",
       },
+      // PATCH(expand-latest-reasoning)
+      reasoningExpansion: {
+        label: "Expandir raciocínio",
+        description:
+          "Quais blocos de raciocínio do agente aparecem expandidos. Os do último turno recolhem quando sua próxima mensagem inicia um novo turno.",
+        options: {
+          always: "Em todos os turnos",
+          latestTurn: "Apenas o último turno",
+          never: "Nunca",
+        },
+      },
       toolCallDetail: {
         label: "Exibição de chamadas de ferramentas",
         description: "Como as chamadas de ferramentas aparecem na linha do tempo",

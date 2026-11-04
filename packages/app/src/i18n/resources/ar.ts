@@ -2317,6 +2317,17 @@ export const ar: TranslationResources = {
         label: "عرض التفكير دائماً",
         description: "إظهار تفكير الوكيل وخطوات الاستدلال بشكل كامل بشكل افتراضي",
       },
+      // PATCH(expand-latest-reasoning)
+      reasoningExpansion: {
+        label: "عرض التفكير موسّعاً",
+        description:
+          "أي كتل تفكير الوكيل تُعرض موسّعة. تُطوى كتل الدور الأخير عندما تبدأ رسالتك التالية دوراً جديداً.",
+        options: {
+          always: "في كل دور",
+          latestTurn: "الدور الأخير فقط",
+          never: "أبداً",
+        },
+      },
       toolCallDetail: {
         label: "عرض استدعاءات الأدوات",
         description: "كيفية ظهور استدعاءات الأدوات في المخطط الزمني",

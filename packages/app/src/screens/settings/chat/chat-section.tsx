@@ -14,6 +14,12 @@ const TOOL_CALL_DETAIL_LEVELS: readonly AppSettings["toolCallDetailLevel"][] = [
   "detailed",
   "overview",
 ];
+// PATCH(expand-latest-reasoning)
+const REASONING_EXPANSIONS: readonly AppSettings["reasoningExpansion"][] = [
+  "always",
+  "latestTurn",
+  "never",
+];
 
 export function ChatSection() {
   const { t } = useTranslation();
@@ -33,8 +39,18 @@ export function ChatSection() {
       void updateSettings({ toolCallDetailLevel }),
     [updateSettings],
   );
-  const changeAutoExpandReasoning = useCallback(
-    (autoExpandReasoning: boolean) => void updateSettings({ autoExpandReasoning }),
+  // PATCH(expand-latest-reasoning): a three-way select replaces the always-expand switch.
+  const reasoningExpansionOptions = useMemo(
+    () =>
+      REASONING_EXPANSIONS.map((value) => ({
+        value,
+        label: t(`settings.general.reasoningExpansion.options.${value}`),
+      })),
+    [t],
+  );
+  const changeReasoningExpansion = useCallback(
+    (reasoningExpansion: AppSettings["reasoningExpansion"]) =>
+      void updateSettings({ reasoningExpansion }),
     [updateSettings],
   );
   const changeChatOutline = useCallback(
@@ -46,11 +62,12 @@ export function ChatSection() {
     <View>
       <SettingsSection title={t("settings.appearance.detailLevel.title")}>
         <SettingsCard>
-          <SettingsSwitch
-            label={t("settings.general.autoExpandReasoning.label")}
-            hint={t("settings.general.autoExpandReasoning.description")}
-            value={settings.autoExpandReasoning}
-            onValueChange={changeAutoExpandReasoning}
+          <SettingsSelect
+            label={t("settings.general.reasoningExpansion.label")}
+            hint={t("settings.general.reasoningExpansion.description")}
+            value={settings.reasoningExpansion}
+            options={reasoningExpansionOptions}
+            onValueChange={changeReasoningExpansion}
           />
           <SettingsSelect
             label={t("settings.general.toolCallDetail.label")}

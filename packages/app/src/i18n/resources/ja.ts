@@ -2301,6 +2301,17 @@ export const ja: TranslationResources = {
         label: "常に思考プロセスを展開",
         description: "デフォルトでAIのエージェント思考・推論ブロックを完全に展開して表示します",
       },
+      // PATCH(expand-latest-reasoning)
+      reasoningExpansion: {
+        label: "思考プロセスの展開",
+        description:
+          "どの思考ブロックを展開して表示するか。最新ターンのブロックは、次のメッセージで新しいターンが始まると折りたたまれます。",
+        options: {
+          always: "毎ターン",
+          latestTurn: "最新ターンのみ",
+          never: "展開しない",
+        },
+      },
       toolCallDetail: {
         label: "ツール呼び出しの表示",
         description: "タイムラインでのツール呼び出しの表示方法",

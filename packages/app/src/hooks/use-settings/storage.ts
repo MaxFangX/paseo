@@ -41,6 +41,8 @@ export type PullRequestOpenLocation = "main" | "side" | "explorer";
 /** What a sidebar workspace row shows in the space to the right of its title. */
 export type SidebarWorkspaceTrailing = "diff" | "timestamp" | "none";
 export type ToolCallDetailLevel = "overview" | "detailed";
+// PATCH(expand-latest-reasoning): which thinking blocks start expanded; supersedes autoExpandReasoning.
+export type ReasoningExpansion = "always" | "latestTurn" | "never";
 
 const ThemePreferenceSchema = z.enum([
   ...THEME_OPTIONS.map((option) => option.name),
@@ -100,6 +102,7 @@ export interface AppSettings {
   /** How usage reads and which windows the sidebar summary shows. */
   usage: UsagePreferences;
   autoExpandReasoning: boolean;
+  reasoningExpansion: ReasoningExpansion; // PATCH(expand-latest-reasoning)
   toolCallDetailLevel: ToolCallDetailLevel;
   chatOutlineEnabled: boolean;
   vimKeybindings: boolean;
@@ -156,6 +159,7 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   sidebarFooterItems: [],
   usage: DEFAULT_USAGE_PREFERENCES,
   autoExpandReasoning: false,
+  reasoningExpansion: "never", // PATCH(expand-latest-reasoning)
   toolCallDetailLevel: "detailed",
   chatOutlineEnabled: true,
   vimKeybindings: false,
@@ -251,6 +255,8 @@ const StoredAppSettingsSchema = z
     sidebarFooterItems: z.array(z.object({ key: z.string(), visible: z.boolean() })).catch([]),
     usage: UsagePreferencesSchema,
     autoExpandReasoning: z.boolean().catch(false),
+    // PATCH(expand-latest-reasoning): absent or invalid falls back to the legacy flag below.
+    reasoningExpansion: z.enum(["always", "latestTurn", "never"]).optional().catch(undefined),
     toolCallDetailLevel: z
       .enum(["overview", "detailed"])
       .or(z.literal("concise").transform(() => "overview" as const))
@@ -307,6 +313,10 @@ const StoredAppSettingsSchema = z
         : DEFAULT_SIDEBAR_CHECKS_DISPLAY);
     const toolCallDetailLevel =
       stored.toolCallDetailLevel ?? (stored.compactToolCalls ? "overview" : "detailed");
+    // PATCH(expand-latest-reasoning): an enabled legacy flag keeps the latest-turn behavior the
+    // fork gave it, not stock Paseo's every-turn expansion.
+    const reasoningExpansion =
+      stored.reasoningExpansion ?? (stored.autoExpandReasoning ? "latestTurn" : "never");
     return {
       ...stored,
       openInSidePane,
@@ -322,6 +332,7 @@ const StoredAppSettingsSchema = z
           (stored.sidebarRowItems.scripts === false ? false : DEFAULT_SIDEBAR_ROW_ITEMS.services),
       },
       toolCallDetailLevel,
+      reasoningExpansion, // PATCH(expand-latest-reasoning)
       needsWrite,
     };
   })

@@ -2405,6 +2405,17 @@ export const en = {
         label: "Always expand reasoning",
         description: "Show agent thinking and chain-of-thought blocks fully expanded by default",
       },
+      // PATCH(expand-latest-reasoning)
+      reasoningExpansion: {
+        label: "Expand reasoning",
+        description:
+          "Which agent thinking blocks start out expanded. Latest-turn blocks collapse once your next message starts a new turn.",
+        options: {
+          always: "Every turn",
+          latestTurn: "Latest turn only",
+          never: "Never",
+        },
+      },
       toolCallDetail: {
         label: "Tool call display",
         description: "How tool calls appear in the timeline",

@@ -2333,6 +2333,17 @@ export const es: TranslationResources = {
         description:
           "Mostrar los bloques de pensamiento y razonamiento del agente totalmente expandidos de forma predeterminada",
       },
+      // PATCH(expand-latest-reasoning)
+      reasoningExpansion: {
+        label: "Expandir razonamiento",
+        description:
+          "Qué bloques de razonamiento del agente se muestran expandidos. Los del último turno se contraen cuando tu siguiente mensaje inicia un turno nuevo.",
+        options: {
+          always: "En todos los turnos",
+          latestTurn: "Solo el último turno",
+          never: "Nunca",
+        },
+      },
       toolCallDetail: {
         label: "Visualización de llamadas a herramientas",
         description: "Cómo aparecen las llamadas a herramientas en la cronología",

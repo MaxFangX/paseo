@@ -800,6 +800,31 @@ describe("appearance settings", () => {
     expect((await loadAppSettingsFromStorage(deps)).toolCallDetailLevel).toBe("overview");
   });
 
+  // PATCH(expand-latest-reasoning)
+  it("migrates an enabled always-expand-reasoning flag to latest-turn expansion", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ autoExpandReasoning: true }),
+      }),
+    });
+
+    expect((await loadAppSettingsFromStorage(deps)).reasoningExpansion).toBe("latestTurn");
+  });
+
+  // PATCH(expand-latest-reasoning)
+  it("prefers a stored reasoning expansion over the legacy flag", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({
+          autoExpandReasoning: true,
+          reasoningExpansion: "never",
+        }),
+      }),
+    });
+
+    expect((await loadAppSettingsFromStorage(deps)).reasoningExpansion).toBe("never");
+  });
+
   it("clears settings with an unrecognized tool call detail level", async () => {
     const deps = makeDeps({
       storage: createInMemoryKeyValueStorage({

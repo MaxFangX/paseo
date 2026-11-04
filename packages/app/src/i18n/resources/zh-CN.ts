@@ -2256,6 +2256,17 @@ export const zhCN: TranslationResources = {
         label: "始终展开推理过程",
         description: "默认情况下完全展开 AI 的思考和推理过程",
       },
+      // PATCH(expand-latest-reasoning)
+      reasoningExpansion: {
+        label: "展开推理过程",
+        description:
+          "选择哪些思考块默认展开。最新一轮的思考块会在你发送下一条消息、开始新一轮时折叠。",
+        options: {
+          always: "每一轮",
+          latestTurn: "仅最新一轮",
+          never: "从不",
+        },
+      },
       toolCallDetail: {
         label: "工具调用显示",
         description: "工具调用在时间线中的显示方式",
