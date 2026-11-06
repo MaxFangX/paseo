@@ -165,6 +165,7 @@ export const fr: TranslationResources = {
       dropFilesHere: "Déposez des fichiers ici",
       editQueuedMessage: "Modifier le message en file d’attente",
       sendQueuedMessageNow: "Envoyer maintenant le message en file d’attente",
+      steerQueuedMessageNow: "Réorienter maintenant avec le message en file d’attente", // PATCH(queue-steer)
       openImage: "Ouvrir l’image jointe",
       removeImage: "Retirer l’image jointe",
       removeFile: "Retirer le fichier joint",
@@ -2313,6 +2314,16 @@ export const fr: TranslationResources = {
           interrupt: "Interrompre",
           steer: "Réorienter",
           queue: "File d’attente",
+        },
+      },
+      // PATCH(queue-steer)
+      queueModifierSend: {
+        label: "Cmd/Ctrl+Entrée en mode file d’attente",
+        description:
+          "Ce que Cmd/Ctrl+Entrée envoie quand l’agent est en cours d’exécution et qu’Entrée met en file d’attente. Réorienter rejoint le tour en cours après son prochain appel d’outil au lieu de l’arrêter.",
+        options: {
+          interrupt: "Interrompre",
+          steer: "Réorienter",
         },
       },
       serviceUrls: {

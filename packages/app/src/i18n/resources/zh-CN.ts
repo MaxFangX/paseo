@@ -163,6 +163,7 @@ export const zhCN: TranslationResources = {
       dropFilesHere: "Drop files here",
       editQueuedMessage: "编辑排队消息",
       sendQueuedMessageNow: "立即发送排队消息",
+      steerQueuedMessageNow: "立即用排队消息引导", // PATCH(queue-steer)
       openImage: "打开图片附件",
       removeImage: "移除图片附件",
       removeFile: "Remove file attachment",
@@ -2238,6 +2239,16 @@ export const zhCN: TranslationResources = {
           interrupt: "中断",
           steer: "引导",
           queue: "排队",
+        },
+      },
+      // PATCH(queue-steer)
+      queueModifierSend: {
+        label: "排队时的 Command/Ctrl+Enter",
+        description:
+          "Agent 运行且 Enter 会排队时，Command/Ctrl+Enter 的发送方式。引导会在下一次工具调用后加入当前回合，而不是中断它。",
+        options: {
+          interrupt: "中断",
+          steer: "引导",
         },
       },
       serviceUrls: {

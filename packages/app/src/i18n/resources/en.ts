@@ -159,6 +159,7 @@ export const en = {
       dropFilesHere: "Drop files here",
       editQueuedMessage: "Edit queued message",
       sendQueuedMessageNow: "Send queued message now",
+      steerQueuedMessageNow: "Steer with queued message now", // PATCH(queue-steer)
       openImage: "Open image attachment",
       removeImage: "Remove image attachment",
       removeFile: "Remove file attachment",
@@ -2387,6 +2388,16 @@ export const en = {
           interrupt: "Interrupt",
           steer: "Steer",
           queue: "Queue",
+        },
+      },
+      // PATCH(queue-steer)
+      queueModifierSend: {
+        label: "Command/Ctrl+Enter while queueing",
+        description:
+          "What Command/Ctrl+Enter sends while the agent is running and Enter queues. Steer joins the running turn after its next tool call instead of stopping it.",
+        options: {
+          interrupt: "Interrupt",
+          steer: "Steer",
         },
       },
       serviceUrls: {

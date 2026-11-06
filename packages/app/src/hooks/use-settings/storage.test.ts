@@ -825,6 +825,24 @@ describe("appearance settings", () => {
     expect((await loadAppSettingsFromStorage(deps)).reasoningExpansion).toBe("never");
   });
 
+  // PATCH(queue-steer)
+  it("keeps a stored steer queue modifier and falls back to interrupt otherwise", async () => {
+    const load = async (queueModifierSend: unknown) =>
+      (
+        await loadAppSettingsFromStorage(
+          makeDeps({
+            storage: createInMemoryKeyValueStorage({
+              [APP_SETTINGS_KEY]: JSON.stringify({ queueModifierSend }),
+            }),
+          }),
+        )
+      ).queueModifierSend;
+
+    expect(await load("steer")).toBe("steer");
+    expect(await load("queue")).toBe("interrupt");
+    expect(await load(undefined)).toBe("interrupt");
+  });
+
   it("clears settings with an unrecognized tool call detail level", async () => {
     const deps = makeDeps({
       storage: createInMemoryKeyValueStorage({

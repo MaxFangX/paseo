@@ -163,6 +163,7 @@ export const ar: TranslationResources = {
       dropFilesHere: "Drop files here",
       editQueuedMessage: "تحرير الرسالة في قائمة الانتظار",
       sendQueuedMessageNow: "إرسال رسالة في قائمة الانتظار الآن",
+      steerQueuedMessageNow: "التوجيه برسالة قائمة الانتظار الآن", // PATCH(queue-steer)
       openImage: "فتح مرفق الصورة",
       removeImage: "إزالة مرفق الصورة",
       removeFile: "Remove file attachment",
@@ -2299,6 +2300,16 @@ export const ar: TranslationResources = {
           interrupt: "مقاطعة",
           steer: "توجيه",
           queue: "طابور",
+        },
+      },
+      // PATCH(queue-steer)
+      queueModifierSend: {
+        label: "Command/Ctrl+Enter أثناء الطابور",
+        description:
+          "ما يرسله Command/Ctrl+Enter عند تشغيل الوكيل بينما يضيف Enter إلى قائمة الانتظار. التوجيه ينضم إلى الدور الجاري بعد استدعاء الأداة التالي بدلاً من إيقافه.",
+        options: {
+          interrupt: "مقاطعة",
+          steer: "توجيه",
         },
       },
       serviceUrls: {

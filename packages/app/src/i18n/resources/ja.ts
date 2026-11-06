@@ -164,6 +164,7 @@ export const ja: TranslationResources = {
       dropFilesHere: "ここにファイルをドロップ",
       editQueuedMessage: "キューに入れたメッセージを編集",
       sendQueuedMessageNow: "キューに入れたメッセージを今すぐ送信",
+      steerQueuedMessageNow: "キューに入れたメッセージで今すぐ指示", // PATCH(queue-steer)
       openImage: "画像添付ファイルを開く",
       removeImage: "画像添付ファイルを削除",
       removeFile: "ファイル添付ファイルを削除",
@@ -2283,6 +2284,16 @@ export const ja: TranslationResources = {
           interrupt: "中断",
           steer: "指示",
           queue: "キュー",
+        },
+      },
+      // PATCH(queue-steer)
+      queueModifierSend: {
+        label: "キュー時の Command/Ctrl+Enter",
+        description:
+          "エージェント実行中に Enter がキューに追加するとき、Command/Ctrl+Enter が送信する方法。指示は中断せず、次のツール呼び出しの後に実行中のターンへ加わります。",
+        options: {
+          interrupt: "中断",
+          steer: "指示",
         },
       },
       serviceUrls: {

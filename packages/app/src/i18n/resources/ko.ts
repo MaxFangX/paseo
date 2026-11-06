@@ -163,6 +163,7 @@ export const ko: TranslationResources = {
       dropFilesHere: "여기에 파일을 끌어다 놓으세요",
       editQueuedMessage: "대기 중인 메시지 편집",
       sendQueuedMessageNow: "대기 중인 메시지 지금 보내기",
+      steerQueuedMessageNow: "대기 중인 메시지로 지금 지시", // PATCH(queue-steer)
       openImage: "이미지 첨부 열기",
       removeImage: "이미지 첨부 제거",
       removeFile: "파일 첨부 제거",
@@ -2274,6 +2275,16 @@ export const ko: TranslationResources = {
           interrupt: "중단",
           steer: "지시",
           queue: "대기열",
+        },
+      },
+      // PATCH(queue-steer)
+      queueModifierSend: {
+        label: "대기열 모드의 Command/Ctrl+Enter",
+        description:
+          "에이전트가 실행 중이고 Enter가 대기열에 추가할 때 Command/Ctrl+Enter가 보내는 방식입니다. 지시는 중단하지 않고 다음 도구 호출 후 실행 중인 턴에 합류합니다.",
+        options: {
+          interrupt: "중단",
+          steer: "지시",
         },
       },
       serviceUrls: {

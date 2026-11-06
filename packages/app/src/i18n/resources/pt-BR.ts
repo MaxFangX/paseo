@@ -164,6 +164,7 @@ export const ptBR: TranslationResources = {
       dropFilesHere: "Solte arquivos aqui",
       editQueuedMessage: "Editar mensagem na fila",
       sendQueuedMessageNow: "Enviar mensagem da fila agora",
+      steerQueuedMessageNow: "Orientar agora com a mensagem da fila", // PATCH(queue-steer)
       openImage: "Abrir anexo de imagem",
       removeImage: "Remover anexo de imagem",
       removeFile: "Remover anexo de arquivo",
@@ -2297,6 +2298,16 @@ export const ptBR: TranslationResources = {
           interrupt: "Interromper",
           steer: "Orientar",
           queue: "Fila",
+        },
+      },
+      // PATCH(queue-steer)
+      queueModifierSend: {
+        label: "Command/Ctrl+Enter ao enfileirar",
+        description:
+          "O que Command/Ctrl+Enter envia enquanto o agente está em execução e Enter enfileira. Orientar entra no turno em andamento após a próxima chamada de ferramenta em vez de interrompê-lo.",
+        options: {
+          interrupt: "Interromper",
+          steer: "Orientar",
         },
       },
       serviceUrls: {

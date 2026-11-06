@@ -38,6 +38,7 @@ import { useHasFinePointer } from "@/hooks/use-fine-pointer";
 import { useShallow } from "zustand/shallow";
 import {
   ArrowUp,
+  CornerDownRight, // PATCH(queue-steer)
   Square,
   Pencil,
   AudioLines,
@@ -373,8 +374,10 @@ interface RenderQueueTrackArgs {
   queuedMessages: readonly QueuedMessage[];
   handleEditQueuedMessage: (id: string) => void;
   handleSendQueuedNow: (id: string) => Promise<void>;
+  handleSteerQueuedNow: (id: string) => Promise<void>; // PATCH(queue-steer)
   editLabel: string;
   sendNowLabel: string;
+  steerNowLabel: string; // PATCH(queue-steer)
   queueTrackRef: QueueKeyboardNav["trackRef"]; // PATCH(queue-arrow-nav)
 }
 
@@ -390,8 +393,10 @@ function renderQueueTrack(args: RenderQueueTrackArgs): ReactElement | null {
           item={item}
           onEdit={handleEditQueuedMessage}
           onSendNow={handleSendQueuedNow}
+          onSteerNow={args.handleSteerQueuedNow} // PATCH(queue-steer)
           editLabel={editLabel}
           sendNowLabel={sendNowLabel}
+          steerNowLabel={args.steerNowLabel} // PATCH(queue-steer)
         />
       ))}
     </View>
@@ -664,16 +669,20 @@ interface QueuedMessageRowProps {
   item: QueuedMessage;
   onEdit: (id: string) => void;
   onSendNow: (id: string) => void;
+  onSteerNow: (id: string) => void; // PATCH(queue-steer)
   editLabel: string;
   sendNowLabel: string;
+  steerNowLabel: string; // PATCH(queue-steer)
 }
 
 function QueuedMessageRow({
   item,
   onEdit,
   onSendNow,
+  onSteerNow, // PATCH(queue-steer)
   editLabel,
   sendNowLabel,
+  steerNowLabel, // PATCH(queue-steer)
 }: QueuedMessageRowProps) {
   const handleEdit = useCallback(() => {
     onEdit(item.id);
@@ -681,6 +690,10 @@ function QueuedMessageRow({
   const handleSendNow = useCallback(() => {
     onSendNow(item.id);
   }, [onSendNow, item.id]);
+  // PATCH(queue-steer)
+  const handleSteerNow = useCallback(() => {
+    onSteerNow(item.id);
+  }, [onSteerNow, item.id]);
   return (
     <View style={styles.queueItem}>
       <Text style={styles.queueText} numberOfLines={2} ellipsizeMode="tail">
@@ -694,6 +707,15 @@ function QueuedMessageRow({
           accessibilityRole="button"
         >
           <ThemedPencil size={ICON_SIZE.sm} uniProps={iconForegroundMapping} />
+        </Pressable>
+        {/* PATCH(queue-steer): join the running turn instead of replacing it. */}
+        <Pressable
+          onPress={handleSteerNow}
+          style={queueEditButtonStyle}
+          accessibilityLabel={steerNowLabel}
+          accessibilityRole="button"
+        >
+          <ThemedCornerDownRight size={ICON_SIZE.sm} uniProps={iconAccentForegroundMapping} />
         </Pressable>
         <Pressable
           onPress={handleSendNow}
@@ -1526,7 +1548,11 @@ function ComposerContentImpl({
   }, [focusInput, onFocusInput]);
 
   const submitMessage = useCallback(
-    async (text: string, submitAttachments: ComposerAttachment[]) => {
+    async (
+      text: string,
+      submitAttachments: ComposerAttachment[],
+      activeTurnBehavior?: "interrupt" | "steer", // PATCH(queue-steer): overrides the setting
+    ) => {
       onMessageSent?.();
       if (onSubmitMessageRef.current) {
         await onSubmitMessageRef.current({ text, attachments: submitAttachments, cwd });
@@ -1539,7 +1565,7 @@ function ComposerContentImpl({
         agentIdRef.current,
         text,
         submitAttachments,
-        appSettings.sendBehavior === "steer" ? "steer" : "interrupt",
+        activeTurnBehavior ?? (appSettings.sendBehavior === "steer" ? "steer" : "interrupt"), // PATCH(queue-steer)
       );
     },
     [appSettings.sendBehavior, cwd, onMessageSent, t],
@@ -1666,7 +1692,12 @@ function ComposerContentImpl({
           if (submitBehavior !== "preserve-and-lock") {
             beginSubmit(submitAttachments);
           }
-          await submitMessage(submitText, submitAttachments);
+          // PATCH(queue-steer): in queue mode a direct send only comes from Command/Ctrl+Enter.
+          await submitMessage(
+            submitText,
+            submitAttachments,
+            appSettings.sendBehavior === "queue" ? appSettings.queueModifierSend : undefined,
+          );
         },
         clearDraft,
         setUserInput: replaceUserInput,
@@ -1687,6 +1718,8 @@ function ComposerContentImpl({
     },
     [
       allowEmptySubmit,
+      appSettings.queueModifierSend, // PATCH(queue-steer)
+      appSettings.sendBehavior, // PATCH(queue-steer)
       beginSubmit,
       clearDraft,
       completeSubmit,
@@ -1936,13 +1969,15 @@ function ComposerContentImpl({
   );
 
   const handleSendQueuedNow = useCallback(
-    async (id: string) => {
+    async (id: string, activeTurnBehavior?: "interrupt" | "steer") => {
       if (!sendAgentMessageRef.current && !onSubmitMessageRef.current) return;
       // PATCH(send-now-hold): keep the rest of the queue from flushing during the turn swap.
       const sendNowHold = beginQueuedSendNow({
         serverId,
         agentId,
-        expectsNewTurn: appSettings.sendBehavior !== "steer",
+        // PATCH(queue-steer): a steer joins the open turn; any send to an idle agent opens one.
+        expectsNewTurn:
+          (activeTurnBehavior ?? appSettings.sendBehavior) !== "steer" || !isAgentRunning,
         catchUp: () => getHostRuntimeStore().drainQueuedAgentMessage(serverId, agentId),
       });
       if (!sendNowHold) return;
@@ -1952,7 +1987,7 @@ function ComposerContentImpl({
         messageId: id,
         queue: queueWriter,
         submitMessage: ({ text, attachments: queuedAttachments }) =>
-          submitMessage(text, queuedAttachments),
+          submitMessage(text, queuedAttachments, activeTurnBehavior), // PATCH(queue-steer)
         failedToSendMessage: t("composer.errors.failedToSend"),
       });
       sendNowHold.settle(result.status === "submitted"); // PATCH(send-now-hold)
@@ -1960,7 +1995,13 @@ function ComposerContentImpl({
         setSendError(result.errorMessage);
       }
     },
-    [agentId, appSettings.sendBehavior, queueWriter, serverId, submitMessage, t],
+    [agentId, appSettings.sendBehavior, isAgentRunning, queueWriter, serverId, submitMessage, t],
+  );
+
+  // PATCH(queue-steer)
+  const handleSteerQueuedNow = useCallback(
+    (id: string) => handleSendQueuedNow(id, "steer"),
+    [handleSendQueuedNow],
   );
 
   const handleQueue = useCallback(
@@ -2348,11 +2389,20 @@ function ComposerContentImpl({
         queuedMessages,
         handleEditQueuedMessage,
         handleSendQueuedNow,
+        handleSteerQueuedNow, // PATCH(queue-steer)
         editLabel: t("composer.attachments.editQueuedMessage"),
         sendNowLabel: t("composer.attachments.sendQueuedMessageNow"),
+        steerNowLabel: t("composer.attachments.steerQueuedMessageNow"), // PATCH(queue-steer)
         queueTrackRef: queueKeyboardNav.trackRef, // PATCH(queue-arrow-nav)
       }),
-    [handleEditQueuedMessage, handleSendQueuedNow, queueKeyboardNav, queuedMessages, t],
+    [
+      handleEditQueuedMessage,
+      handleSendQueuedNow,
+      handleSteerQueuedNow,
+      queueKeyboardNav,
+      queuedMessages,
+      t,
+    ],
   );
 
   const autocompleteConfiguration = useMemo(
@@ -2706,6 +2756,7 @@ const queueSendButtonStyle = queueActionStyle([styles.queueActionButton, styles.
 const ThemedAttachmentSpinner = withUnistyles(LoadingSpinner);
 const ThemedPencil = withUnistyles(Pencil);
 const ThemedArrowUp = withUnistyles(ArrowUp);
+const ThemedCornerDownRight = withUnistyles(CornerDownRight); // PATCH(queue-steer)
 const ThemedGitPullRequest = withUnistyles(GitPullRequest);
 const ThemedCircleDot = withUnistyles(CircleDot);
 const ThemedAudioLines = withUnistyles(AudioLines);

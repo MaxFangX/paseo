@@ -164,6 +164,7 @@ export const es: TranslationResources = {
       dropFilesHere: "Drop files here",
       editQueuedMessage: "Editar mensaje en cola",
       sendQueuedMessageNow: "Enviar mensaje en cola ahora",
+      steerQueuedMessageNow: "Dirigir ahora con el mensaje en cola", // PATCH(queue-steer)
       openImage: "Abrir imagen adjunta",
       removeImage: "Quitar imagen adjunta",
       removeFile: "Remove file attachment",
@@ -2314,6 +2315,16 @@ export const es: TranslationResources = {
           interrupt: "Interrumpir",
           steer: "Dirigir",
           queue: "Cola",
+        },
+      },
+      // PATCH(queue-steer)
+      queueModifierSend: {
+        label: "Command/Ctrl+Enter al poner en cola",
+        description:
+          "Lo que Command/Ctrl+Enter envía mientras el agente se está ejecutando y Enter pone en cola. Dirigir se une al turno en curso tras su próxima llamada a herramienta en lugar de detenerlo.",
+        options: {
+          interrupt: "Interrumpir",
+          steer: "Dirigir",
         },
       },
       serviceUrls: {

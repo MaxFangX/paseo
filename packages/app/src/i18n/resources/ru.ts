@@ -164,6 +164,7 @@ export const ru: TranslationResources = {
       dropFilesHere: "Переместите файлы сюда",
       editQueuedMessage: "Изменить сообщение из очереди",
       sendQueuedMessageNow: "Отправить сообщение из очереди сейчас",
+      steerQueuedMessageNow: "Направить сообщением из очереди сейчас", // PATCH(queue-steer)
       openImage: "Открыть прикрепленное изображение",
       removeImage: "Удалить прикрепленное изображение",
       removeFile: "Удалить прикрепленный файл",
@@ -2299,6 +2300,16 @@ export const ru: TranslationResources = {
           interrupt: "Прерывать",
           steer: "Направить",
           queue: "Поставить в очередь",
+        },
+      },
+      // PATCH(queue-steer)
+      queueModifierSend: {
+        label: "Command/Ctrl+Enter в режиме очереди",
+        description:
+          "Что отправляет Command/Ctrl+Enter, когда агент работает, а Enter ставит сообщение в очередь. «Направить» добавляет сообщение в текущий ход после следующего вызова инструмента, не прерывая его.",
+        options: {
+          interrupt: "Прерывать",
+          steer: "Направить",
         },
       },
       serviceUrls: {
