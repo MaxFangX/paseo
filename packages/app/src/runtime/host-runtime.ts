@@ -92,6 +92,7 @@ import { createPerformanceTrace } from "@/performance/native-trace";
 import { revokePushNotifications } from "@/push-notifications";
 import { createAppWebSocketFactory } from "./websocket-factory";
 import { beginQueuedSendNow, isQueueDrainHeld } from "@/composer/send-now-hold"; // PATCH(send-now-hold)
+import { isQueueHeldByStop } from "@/composer/stop-queue-hold"; // PATCH(stop-holds-queue)
 
 export type HostRuntimeConnectionStatus = "idle" | "connecting" | "online" | "offline" | "error";
 export type PairingNavigationTarget = "openProject" | "hostRoot" | "hostSettings";
@@ -2561,6 +2562,7 @@ export class HostRuntimeStore {
     const drainKey = `${serverId}:${agentId}`;
     if (this.queuedAgentDrainInFlight.has(drainKey)) return;
     if (isQueueDrainHeld(serverId, agentId)) return; // PATCH(send-now-hold)
+    if (isQueueHeldByStop(serverId, agentId)) return; // PATCH(stop-holds-queue)
     const store = useSessionStore.getState();
     const session = store.sessions[serverId];
     const queue = session?.queuedMessages.get(agentId);

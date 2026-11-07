@@ -34,6 +34,7 @@ import { subscriptionFixture } from "./subscription-fixture";
 import { readDesktopManagedLocalCredential } from "@/desktop/daemon/local-credential";
 import type { HostConfirmationRequest } from "./host-confirmation";
 import { beginQueuedSendNow } from "@/composer/send-now-hold"; // PATCH(send-now-hold)
+import { holdQueueAfterStop } from "@/composer/stop-queue-hold"; // PATCH(stop-holds-queue)
 
 it("requests the managed connection credential through desktop main without a web hint", async () => {
   const requests: string[] = [];
@@ -4931,6 +4932,61 @@ describe("send-now hold", () => {
       "message one",
       "message two",
     ]);
+    useSessionStore.getState().clearSession(host.serverId);
+  });
+});
+
+// PATCH(stop-holds-queue)
+describe("stop hold", () => {
+  it("sends nothing from the queue after stop until a later turn opens", async () => {
+    const host = makeHost({ serverId: "srv_stop_hold" });
+    const fakeClient = new FakeDaemonClient();
+    const store = new HostRuntimeStore({
+      deps: {
+        createClient: () => fakeClient as unknown as DaemonClient,
+        connectToDaemon: async () => ({
+          client: fakeClient as unknown as DaemonClient,
+          serverId: host.serverId,
+          hostname: null,
+        }),
+        getClientId: async () => "cid_stop_hold",
+      },
+    });
+    const sessionStore = useSessionStore.getState();
+    sessionStore.initializeSession(host.serverId, fakeClient as unknown as DaemonClient, 1);
+    sessionStore.setQueuedMessages(
+      host.serverId,
+      new Map([["agent", [{ id: "queued", text: "after stop", attachments: [] }]]]),
+    );
+    const entry = makeFetchAgentsEntry({
+      id: "agent",
+      cwd: "/repo",
+      updatedAt: "2026-11-06T10:00:00.000Z",
+    });
+    const withTurn = (turn: Agent["turn"]): Map<string, Agent> =>
+      new Map([["agent", { ...replicaAgent(entry.agent, host.serverId), turn }]]);
+    sessionStore.setAgents(
+      host.serverId,
+      withTurn({ phase: "open", turnId: "turn-1", startedAt: null, cancellationRequestId: null }),
+    );
+
+    // Stop ends the turn; the idle edge wakes the drain, and the hold keeps the message queued.
+    holdQueueAfterStop(host.serverId, "agent");
+    sessionStore.setAgents(host.serverId, withTurn({ phase: "idle", cancellationRequestId: null }));
+    store.drainQueuedAgentMessage(host.serverId, "agent");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fakeClient.sentAgentMessages).toHaveLength(0);
+
+    // The user sends again, that turn ends, and the queue drains as usual.
+    sessionStore.setAgents(
+      host.serverId,
+      withTurn({ phase: "open", turnId: "turn-2", startedAt: null, cancellationRequestId: null }),
+    );
+    sessionStore.setAgents(host.serverId, withTurn({ phase: "idle", cancellationRequestId: null }));
+    store.drainQueuedAgentMessage(host.serverId, "agent");
+    await fakeClient.waitForSentMessages(1);
+
+    expect(fakeClient.sentAgentMessages.map((sent) => sent[1])).toEqual(["after stop"]);
     useSessionStore.getState().clearSession(host.serverId);
   });
 });

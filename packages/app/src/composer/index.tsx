@@ -8,6 +8,7 @@ import { createStore, type StoreApi } from "zustand/vanilla";
 import { useStore } from "zustand";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { beginQueuedSendNow } from "./send-now-hold"; // PATCH(send-now-hold)
+import { holdQueueAfterStop, releaseQueueAfterStop } from "./stop-queue-hold"; // PATCH(stop-holds-queue)
 import { QueueActionButton, sendNowTooltipKey } from "./queue-action-button"; // PATCH(queue-tooltips)
 import { useQueueKeyboardNav, type QueueKeyboardNav } from "./queue-keyboard-nav"; // PATCH(queue-arrow-nav)
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -1930,9 +1931,11 @@ function ComposerContentImpl({
       isConnected,
     });
     if (!cancellation) return;
+    holdQueueAfterStop(serverId, targetAgentId); // PATCH(stop-holds-queue)
     const requestId = getHostRuntimeStore().beginAgentCancellation(serverId, targetAgentId);
     void cancellation
       .catch((error) => {
+        releaseQueueAfterStop(serverId, targetAgentId); // PATCH(stop-holds-queue): the turn runs on
         const message = resolveErrorMessage(error);
         if (message && message.trim().length > 0) {
           toastErrorRef.current(message);
