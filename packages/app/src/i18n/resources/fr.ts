@@ -165,7 +165,8 @@ export const fr: TranslationResources = {
       dropFilesHere: "Déposez des fichiers ici",
       editQueuedMessage: "Modifier le message en file d’attente",
       sendQueuedMessageNow: "Envoyer maintenant le message en file d’attente",
-      steerQueuedMessageNow: "Réorienter maintenant avec le message en file d’attente", // PATCH(queue-steer)
+      steerQueuedMessageNow: "Réorienter le tour en cours", // PATCH(queue-steer)
+      interruptQueuedMessageNow: "Interrompre et envoyer maintenant", // PATCH(queue-tooltips)
       openImage: "Ouvrir l’image jointe",
       removeImage: "Retirer l’image jointe",
       removeFile: "Retirer le fichier joint",

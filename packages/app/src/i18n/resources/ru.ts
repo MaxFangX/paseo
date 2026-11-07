@@ -164,7 +164,8 @@ export const ru: TranslationResources = {
       dropFilesHere: "Переместите файлы сюда",
       editQueuedMessage: "Изменить сообщение из очереди",
       sendQueuedMessageNow: "Отправить сообщение из очереди сейчас",
-      steerQueuedMessageNow: "Направить сообщением из очереди сейчас", // PATCH(queue-steer)
+      steerQueuedMessageNow: "Направить текущий ход", // PATCH(queue-steer)
+      interruptQueuedMessageNow: "Прервать и отправить сейчас", // PATCH(queue-tooltips)
       openImage: "Открыть прикрепленное изображение",
       removeImage: "Удалить прикрепленное изображение",
       removeFile: "Удалить прикрепленный файл",

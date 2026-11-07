@@ -164,7 +164,8 @@ export const ja: TranslationResources = {
       dropFilesHere: "ここにファイルをドロップ",
       editQueuedMessage: "キューに入れたメッセージを編集",
       sendQueuedMessageNow: "キューに入れたメッセージを今すぐ送信",
-      steerQueuedMessageNow: "キューに入れたメッセージで今すぐ指示", // PATCH(queue-steer)
+      steerQueuedMessageNow: "実行中のターンに指示", // PATCH(queue-steer)
+      interruptQueuedMessageNow: "中断して今すぐ送信", // PATCH(queue-tooltips)
       openImage: "画像添付ファイルを開く",
       removeImage: "画像添付ファイルを削除",
       removeFile: "ファイル添付ファイルを削除",

@@ -159,7 +159,8 @@ export const en = {
       dropFilesHere: "Drop files here",
       editQueuedMessage: "Edit queued message",
       sendQueuedMessageNow: "Send queued message now",
-      steerQueuedMessageNow: "Steer with queued message now", // PATCH(queue-steer)
+      steerQueuedMessageNow: "Steer into the running turn", // PATCH(queue-steer)
+      interruptQueuedMessageNow: "Interrupt and send now", // PATCH(queue-tooltips)
       openImage: "Open image attachment",
       removeImage: "Remove image attachment",
       removeFile: "Remove file attachment",

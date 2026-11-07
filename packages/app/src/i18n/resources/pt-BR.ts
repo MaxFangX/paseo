@@ -164,7 +164,8 @@ export const ptBR: TranslationResources = {
       dropFilesHere: "Solte arquivos aqui",
       editQueuedMessage: "Editar mensagem na fila",
       sendQueuedMessageNow: "Enviar mensagem da fila agora",
-      steerQueuedMessageNow: "Orientar agora com a mensagem da fila", // PATCH(queue-steer)
+      steerQueuedMessageNow: "Orientar o turno em andamento", // PATCH(queue-steer)
+      interruptQueuedMessageNow: "Interromper e enviar agora", // PATCH(queue-tooltips)
       openImage: "Abrir anexo de imagem",
       removeImage: "Remover anexo de imagem",
       removeFile: "Remover anexo de arquivo",

@@ -164,7 +164,8 @@ export const es: TranslationResources = {
       dropFilesHere: "Drop files here",
       editQueuedMessage: "Editar mensaje en cola",
       sendQueuedMessageNow: "Enviar mensaje en cola ahora",
-      steerQueuedMessageNow: "Dirigir ahora con el mensaje en cola", // PATCH(queue-steer)
+      steerQueuedMessageNow: "Dirigir el turno en curso", // PATCH(queue-steer)
+      interruptQueuedMessageNow: "Interrumpir y enviar ahora", // PATCH(queue-tooltips)
       openImage: "Abrir imagen adjunta",
       removeImage: "Quitar imagen adjunta",
       removeFile: "Remove file attachment",

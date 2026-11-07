@@ -163,7 +163,8 @@ export const ko: TranslationResources = {
       dropFilesHere: "여기에 파일을 끌어다 놓으세요",
       editQueuedMessage: "대기 중인 메시지 편집",
       sendQueuedMessageNow: "대기 중인 메시지 지금 보내기",
-      steerQueuedMessageNow: "대기 중인 메시지로 지금 지시", // PATCH(queue-steer)
+      steerQueuedMessageNow: "실행 중인 턴에 지시", // PATCH(queue-steer)
+      interruptQueuedMessageNow: "중단하고 지금 보내기", // PATCH(queue-tooltips)
       openImage: "이미지 첨부 열기",
       removeImage: "이미지 첨부 제거",
       removeFile: "파일 첨부 제거",

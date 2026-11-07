@@ -163,7 +163,8 @@ export const zhCN: TranslationResources = {
       dropFilesHere: "Drop files here",
       editQueuedMessage: "编辑排队消息",
       sendQueuedMessageNow: "立即发送排队消息",
-      steerQueuedMessageNow: "立即用排队消息引导", // PATCH(queue-steer)
+      steerQueuedMessageNow: "引导当前回合", // PATCH(queue-steer)
+      interruptQueuedMessageNow: "中断并立即发送", // PATCH(queue-tooltips)
       openImage: "打开图片附件",
       removeImage: "移除图片附件",
       removeFile: "Remove file attachment",

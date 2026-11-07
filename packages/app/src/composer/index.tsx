@@ -8,11 +8,11 @@ import { createStore, type StoreApi } from "zustand/vanilla";
 import { useStore } from "zustand";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { beginQueuedSendNow } from "./send-now-hold"; // PATCH(send-now-hold)
+import { QueueActionButton, sendNowTooltipKey } from "./queue-action-button"; // PATCH(queue-tooltips)
 import { useQueueKeyboardNav, type QueueKeyboardNav } from "./queue-keyboard-nav"; // PATCH(queue-arrow-nav)
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
   View,
-  Pressable,
   Text,
   StyleSheet as RNStyleSheet,
   type PressableStateCallbackType,
@@ -378,6 +378,7 @@ interface RenderQueueTrackArgs {
   editLabel: string;
   sendNowLabel: string;
   steerNowLabel: string; // PATCH(queue-steer)
+  sendNowTooltip: string; // PATCH(queue-tooltips)
   queueTrackRef: QueueKeyboardNav["trackRef"]; // PATCH(queue-arrow-nav)
 }
 
@@ -397,6 +398,7 @@ function renderQueueTrack(args: RenderQueueTrackArgs): ReactElement | null {
           editLabel={editLabel}
           sendNowLabel={sendNowLabel}
           steerNowLabel={args.steerNowLabel} // PATCH(queue-steer)
+          sendNowTooltip={args.sendNowTooltip} // PATCH(queue-tooltips)
         />
       ))}
     </View>
@@ -673,6 +675,7 @@ interface QueuedMessageRowProps {
   editLabel: string;
   sendNowLabel: string;
   steerNowLabel: string; // PATCH(queue-steer)
+  sendNowTooltip: string; // PATCH(queue-tooltips)
 }
 
 function QueuedMessageRow({
@@ -683,6 +686,7 @@ function QueuedMessageRow({
   editLabel,
   sendNowLabel,
   steerNowLabel, // PATCH(queue-steer)
+  sendNowTooltip, // PATCH(queue-tooltips)
 }: QueuedMessageRowProps) {
   const handleEdit = useCallback(() => {
     onEdit(item.id);
@@ -700,31 +704,34 @@ function QueuedMessageRow({
         {item.text}
       </Text>
       <View style={styles.queueActions}>
-        <Pressable
+        <QueueActionButton
+          tooltip={editLabel} // PATCH(queue-tooltips)
           onPress={handleEdit}
           style={queueEditButtonStyle} // PATCH(queue-arrow-nav)
           accessibilityLabel={editLabel}
           accessibilityRole="button"
         >
           <ThemedPencil size={ICON_SIZE.sm} uniProps={iconForegroundMapping} />
-        </Pressable>
+        </QueueActionButton>
         {/* PATCH(queue-steer): join the running turn instead of replacing it. */}
-        <Pressable
+        <QueueActionButton
+          tooltip={steerNowLabel} // PATCH(queue-tooltips)
           onPress={handleSteerNow}
           style={queueEditButtonStyle}
           accessibilityLabel={steerNowLabel}
           accessibilityRole="button"
         >
           <ThemedCornerDownRight size={ICON_SIZE.sm} uniProps={iconAccentForegroundMapping} />
-        </Pressable>
-        <Pressable
+        </QueueActionButton>
+        <QueueActionButton
+          tooltip={sendNowTooltip} // PATCH(queue-tooltips)
           onPress={handleSendNow}
           style={queueSendButtonStyle} // PATCH(queue-arrow-nav)
           accessibilityLabel={sendNowLabel}
           accessibilityRole="button"
         >
           <ThemedArrowUp size={ICON_SIZE.sm} uniProps={iconAccentForegroundMapping} />
-        </Pressable>
+        </QueueActionButton>
       </View>
     </View>
   );
@@ -2393,9 +2400,12 @@ function ComposerContentImpl({
         editLabel: t("composer.attachments.editQueuedMessage"),
         sendNowLabel: t("composer.attachments.sendQueuedMessageNow"),
         steerNowLabel: t("composer.attachments.steerQueuedMessageNow"), // PATCH(queue-steer)
+        sendNowTooltip: t(sendNowTooltipKey(appSettings.sendBehavior, isAgentRunning)), // PATCH(queue-tooltips)
         queueTrackRef: queueKeyboardNav.trackRef, // PATCH(queue-arrow-nav)
       }),
     [
+      appSettings.sendBehavior, // PATCH(queue-tooltips)
+      isAgentRunning, // PATCH(queue-tooltips)
       handleEditQueuedMessage,
       handleSendQueuedNow,
       handleSteerQueuedNow,

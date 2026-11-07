@@ -163,7 +163,8 @@ export const ar: TranslationResources = {
       dropFilesHere: "Drop files here",
       editQueuedMessage: "تحرير الرسالة في قائمة الانتظار",
       sendQueuedMessageNow: "إرسال رسالة في قائمة الانتظار الآن",
-      steerQueuedMessageNow: "التوجيه برسالة قائمة الانتظار الآن", // PATCH(queue-steer)
+      steerQueuedMessageNow: "توجيه الدور الجاري", // PATCH(queue-steer)
+      interruptQueuedMessageNow: "المقاطعة والإرسال الآن", // PATCH(queue-tooltips)
       openImage: "فتح مرفق الصورة",
       removeImage: "إزالة مرفق الصورة",
       removeFile: "Remove file attachment",
