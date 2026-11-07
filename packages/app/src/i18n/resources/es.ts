@@ -166,6 +166,8 @@ export const es: TranslationResources = {
       sendQueuedMessageNow: "Enviar mensaje en cola ahora",
       steerQueuedMessageNow: "Dirigir el turno en curso", // PATCH(queue-steer)
       interruptQueuedMessageNow: "Interrumpir y enviar ahora", // PATCH(queue-tooltips)
+      pendingSteerStatus: "Aún no leído", // PATCH(steer-delivery)
+      pendingSteerLabel: "Indicación que el agente aún no ha leído: {{text}}", // PATCH(steer-delivery)
       openImage: "Abrir imagen adjunta",
       removeImage: "Quitar imagen adjunta",
       removeFile: "Remove file attachment",

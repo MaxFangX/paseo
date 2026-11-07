@@ -1204,3 +1204,63 @@ test("re-applying the current thinking option keeps the existing query", async (
 
   await session.close();
 });
+
+// PATCH(steer-delivery)
+function findSteerEcho(events: AgentStreamEvent[]): number {
+  return events.findIndex(
+    (event) =>
+      event.type === "timeline" &&
+      event.item.type === "user_message" &&
+      event.item.clientMessageId === "steer-client",
+  );
+}
+
+// PATCH(steer-delivery)
+test("a steer's row waits for Claude to start reading it", async () => {
+  const { session, query, turn } = await startSteeredTurn("steer-delivery-echo-session");
+
+  query()?.emit({ type: "assistant", message: { content: "BEFORE_READ" } });
+  query()?.emit(buildCommandLifecycle(query()?.prompts[1]?.uuid, "started"));
+  query()?.emit(buildSuccessResult("steer-delivery-echo-session"));
+  const events = await collectUntilTerminal(turn);
+
+  const beforeRead = events.findIndex((event) =>
+    collectAssistantText([event]).includes("BEFORE_READ"),
+  );
+  expect(beforeRead).toBeGreaterThanOrEqual(0);
+  expect(findSteerEcho(events)).toBeGreaterThan(beforeRead);
+  expect(events[findSteerEcho(events)]).toMatchObject({ item: { text: "queued steer" } });
+  await session.close();
+});
+
+// PATCH(steer-delivery)
+test("interrupt lists the steers Claude never read on the canceled turn", async () => {
+  const { session, turn } = await startSteeredTurn("steer-delivery-withdrawn-session");
+
+  await session.interrupt();
+  const events = await collectUntilTerminal(turn);
+
+  expect(events.find((event) => event.type === "turn_canceled")).toMatchObject({
+    withdrawnSteerClientMessageIds: ["steer-client"],
+  });
+  expect(findSteerEcho(events)).toBe(-1);
+  await session.close();
+});
+
+// PATCH(steer-delivery)
+test("a steer Claude started is not listed as withdrawn", async () => {
+  const { session, query, turn } = await startSteeredTurn("steer-delivery-read-session");
+
+  query()?.emit(buildCommandLifecycle(query()?.prompts[1]?.uuid, "started"));
+  query()?.emit({ type: "assistant", message: { content: "STEER_READ" } });
+  await consumeUntil(turn, (event) => collectAssistantText([event]).includes("STEER_READ"));
+
+  await session.interrupt();
+  const canceled = (await collectUntilTerminal(turn)).find(
+    (event) => event.type === "turn_canceled",
+  );
+
+  expect(canceled).toBeDefined();
+  expect(canceled).not.toHaveProperty("withdrawnSteerClientMessageIds");
+  await session.close();
+});

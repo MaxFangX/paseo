@@ -165,6 +165,8 @@ export const zhCN: TranslationResources = {
       sendQueuedMessageNow: "立即发送排队消息",
       steerQueuedMessageNow: "引导当前回合", // PATCH(queue-steer)
       interruptQueuedMessageNow: "中断并立即发送", // PATCH(queue-tooltips)
+      pendingSteerStatus: "尚未读取", // PATCH(steer-delivery)
+      pendingSteerLabel: "Agent 尚未读取的引导：{{text}}", // PATCH(steer-delivery)
       openImage: "打开图片附件",
       removeImage: "移除图片附件",
       removeFile: "Remove file attachment",

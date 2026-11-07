@@ -437,7 +437,14 @@ export type AgentStreamEvent =
       diagnostic?: string;
       turnId?: string;
     }
-  | { type: "turn_canceled"; provider: AgentProvider; reason: string; turnId?: string }
+  | {
+      type: "turn_canceled";
+      provider: AgentProvider;
+      reason: string;
+      turnId?: string;
+      /** PATCH(steer-delivery): client IDs of steers the provider never read. */
+      withdrawnSteerClientMessageIds?: string[];
+    }
   | {
       type: "timeline";
       item: AgentTimelineItem;
@@ -683,6 +690,11 @@ export interface AgentSession {
   run(prompt: AgentPromptInput, options?: AgentRunOptions): Promise<AgentRunResult>;
   startTurn(prompt: AgentPromptInput, options?: AgentRunOptions): Promise<{ turnId: string }>;
   steerActiveTurn?(prompt: AgentPromptInput, options: SteerActiveTurnOptions): Promise<SteerResult>;
+  /**
+   * PATCH(steer-delivery): the provider echoes an accepted steer once it reads it, and that echo
+   * records the steer's row, so the manager does not record it on acceptance.
+   */
+  readonly defersSteerEcho?: boolean;
   subscribe(callback: (event: AgentStreamEvent) => void): () => void;
   streamHistory(): AsyncGenerator<AgentStreamEvent>;
   getRuntimeInfo(): Promise<AgentRuntimeInfo>;

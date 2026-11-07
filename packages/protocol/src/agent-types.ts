@@ -412,7 +412,14 @@ export type AgentStreamEvent =
       diagnostic?: string;
       turnId?: string;
     }
-  | { type: "turn_canceled"; provider: AgentProvider; reason: string; turnId?: string }
+  | {
+      type: "turn_canceled";
+      provider: AgentProvider;
+      reason: string;
+      turnId?: string;
+      /** PATCH(steer-delivery): client IDs of steers the provider never read. */
+      withdrawnSteerClientMessageIds?: string[];
+    }
   | {
       type: "timeline";
       item: AgentTimelineItem;

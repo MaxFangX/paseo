@@ -2987,6 +2987,7 @@ export class AgentManager {
     clientMessageId: string | undefined,
     expectedTurnId: string,
   ): Promise<void> {
+    if (agent.session.defersSteerEcho) return; // PATCH(steer-delivery)
     if (!clientMessageId) {
       return;
     }

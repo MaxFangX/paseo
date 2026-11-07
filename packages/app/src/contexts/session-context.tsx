@@ -50,6 +50,7 @@ import { toErrorMessage } from "@/utils/error-messages";
 import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
 import { applyCheckoutStatusUpdateFromEvent } from "@/git/checkout-status-cache";
 import { resyncProviderSubagents, useProviderSubagentStore } from "@/subagents/provider-store";
+import { observeSteerStreamEvent } from "@/composer/pending-steers"; // PATCH(steer-delivery)
 
 // Re-export types from session-store and draft-store for backward compatibility
 export type { DraftInput } from "@/stores/draft-store";
@@ -360,6 +361,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     const onStream = (message: SessionOutboundMessage) => {
       if (message.type !== "agent_stream") return;
       const { agentId, event, timestamp, seq, epoch } = message.payload;
+      observeSteerStreamEvent(serverId, agentId, event); // PATCH(steer-delivery)
       const parsedTimestamp = new Date(timestamp);
       const streamEvent = event;
       if (

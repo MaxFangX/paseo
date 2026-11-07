@@ -167,6 +167,8 @@ export const fr: TranslationResources = {
       sendQueuedMessageNow: "Envoyer maintenant le message en file d’attente",
       steerQueuedMessageNow: "Réorienter le tour en cours", // PATCH(queue-steer)
       interruptQueuedMessageNow: "Interrompre et envoyer maintenant", // PATCH(queue-tooltips)
+      pendingSteerStatus: "Pas encore lu", // PATCH(steer-delivery)
+      pendingSteerLabel: "Réorientation que l’agent n’a pas encore lue : {{text}}", // PATCH(steer-delivery)
       openImage: "Ouvrir l’image jointe",
       removeImage: "Retirer l’image jointe",
       removeFile: "Retirer le fichier joint",

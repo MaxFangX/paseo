@@ -166,6 +166,8 @@ export const ru: TranslationResources = {
       sendQueuedMessageNow: "Отправить сообщение из очереди сейчас",
       steerQueuedMessageNow: "Направить текущий ход", // PATCH(queue-steer)
       interruptQueuedMessageNow: "Прервать и отправить сейчас", // PATCH(queue-tooltips)
+      pendingSteerStatus: "Ещё не прочитано", // PATCH(steer-delivery)
+      pendingSteerLabel: "Указание, которое агент ещё не прочитал: {{text}}", // PATCH(steer-delivery)
       openImage: "Открыть прикрепленное изображение",
       removeImage: "Удалить прикрепленное изображение",
       removeFile: "Удалить прикрепленный файл",

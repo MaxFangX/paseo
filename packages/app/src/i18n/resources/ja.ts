@@ -166,6 +166,8 @@ export const ja: TranslationResources = {
       sendQueuedMessageNow: "キューに入れたメッセージを今すぐ送信",
       steerQueuedMessageNow: "実行中のターンに指示", // PATCH(queue-steer)
       interruptQueuedMessageNow: "中断して今すぐ送信", // PATCH(queue-tooltips)
+      pendingSteerStatus: "未読", // PATCH(steer-delivery)
+      pendingSteerLabel: "エージェントがまだ読んでいない指示: {{text}}", // PATCH(steer-delivery)
       openImage: "画像添付ファイルを開く",
       removeImage: "画像添付ファイルを削除",
       removeFile: "ファイル添付ファイルを削除",

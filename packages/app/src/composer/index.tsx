@@ -9,6 +9,8 @@ import { useStore } from "zustand";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { beginQueuedSendNow } from "./send-now-hold"; // PATCH(send-now-hold)
 import { holdQueueAfterStop, releaseQueueAfterStop } from "./stop-queue-hold"; // PATCH(stop-holds-queue)
+import { createSteerAwareSubmissionWriter } from "./pending-steers"; // PATCH(steer-delivery)
+import { PendingSteerTrack } from "./pending-steer-track"; // PATCH(steer-delivery)
 import { QueueActionButton, sendNowTooltipKey } from "./queue-action-button"; // PATCH(queue-tooltips)
 import { useQueueKeyboardNav, type QueueKeyboardNav } from "./queue-keyboard-nav"; // PATCH(queue-arrow-nav)
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -122,7 +124,6 @@ import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { submitAgentInput } from "@/composer/submit";
-import { createMessageSubmissionWriter } from "@/composer/submission/writer";
 import { ComposerKeyboardScopeProvider, useComposerKeyboardScope } from "@/composer/keyboard-scope";
 import { useAppSettings } from "@/hooks/use-settings";
 import { RenderProfile } from "@/utils/render-profiler";
@@ -1602,7 +1603,11 @@ function ComposerContentImpl({
           supportsForgeAttachments: supportsForgeSearch,
         }),
         encodeImages,
-        submission: createMessageSubmissionWriter(serverId),
+        // PATCH(steer-delivery): a steer into an open turn waits above the queue until it is read.
+        submission: createSteerAwareSubmissionWriter(serverId, {
+          text,
+          attachments: sendAttachments,
+        }),
         activeTurnBehavior,
         activeTurnId:
           activeTurnBehavior === "steer"
@@ -2495,6 +2500,8 @@ function ComposerContentImpl({
         {/* Input area */}
         <View style={inputAreaContainerStyle}>
           <View style={inputAreaContentStyle}>
+            {/* PATCH(steer-delivery) */}
+            {isFullscreen ? null : <PendingSteerTrack serverId={serverId} agentId={agentId} />}
             {isFullscreen ? null : queueList}
             {!isFullscreen && sendErrorNode}
 

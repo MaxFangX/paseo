@@ -12083,3 +12083,81 @@ test("reads the last durable assistant response without loading a stored-only ch
   );
   expect(manager.getAgent("stored-child")).toBeNull();
 });
+
+// PATCH(steer-delivery)
+class DeferredEchoSteeringSession extends SteeringTestSession {
+  readonly defersSteerEcho = true;
+
+  override async steerActiveTurn(
+    _prompt: AgentPromptInput,
+    options: import("./agent-sdk-types.js").SteerActiveTurnOptions,
+  ): Promise<import("./agent-sdk-types.js").SteerResult> {
+    this.steerCount += 1;
+    return options.expectedTurnId === `active-turn-${this.startCount}`
+      ? { status: "accepted" }
+      : { status: "unavailable" };
+  }
+}
+
+// PATCH(steer-delivery)
+test("a deferred-echo steer gets its row when the provider reads it, not when it is accepted", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-deferred-steer-"));
+  const session = new DeferredEchoSteeringSession({ provider: "codex", cwd: workdir });
+  const client = new (class extends TestAgentClient {
+    override async createSession(): Promise<AgentSession> {
+      return session;
+    }
+  })();
+  const manager = new AgentManager({ clients: { codex: client }, logger });
+  let agentId: string | null = null;
+  try {
+    const agent = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+      workspaceId: undefined,
+    });
+    agentId = agent.id;
+    const stream = manager.streamAgent(agent.id, "start");
+    void (async () => {
+      for await (const _event of stream) {
+      }
+    })();
+    await manager.waitForAgentRunStart(agent.id);
+    const steerRows = () =>
+      manager
+        .getTimeline(agent.id)
+        .filter((item) => item.type === "user_message" && item.clientMessageId === "client-later");
+
+    await manager.steerAgentRun(agent.id, "later", { clientMessageId: "client-later" });
+    expect(steerRows()).toHaveLength(0);
+
+    session.pushEvent({
+      type: "timeline",
+      provider: "codex",
+      item: { type: "assistant_message", text: "work before the read" },
+    });
+    session.pushEvent({
+      type: "timeline",
+      provider: "codex",
+      turnId: "active-turn-1",
+      item: {
+        type: "user_message",
+        text: "later",
+        clientMessageId: "client-later",
+        messageId: "provider-later",
+      },
+    });
+    await vi.waitFor(() => expect(steerRows()).toHaveLength(1));
+
+    const timeline = manager.getTimeline(agent.id);
+    const workIndex = timeline.findIndex(
+      (item) => item.type === "assistant_message" && item.text === "work before the read",
+    );
+    const steerIndex = timeline.findIndex(
+      (item) => item.type === "user_message" && item.clientMessageId === "client-later",
+    );
+    expect(workIndex).toBeGreaterThanOrEqual(0);
+    expect(steerIndex).toBeGreaterThan(workIndex);
+  } finally {
+    if (agentId) await manager.closeAgent(agentId);
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});

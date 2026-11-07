@@ -770,6 +770,7 @@ export const AgentStreamEventPayloadSchema = z.discriminatedUnion("type", [
     provider: AgentProviderSchema,
     turnId: z.string().optional(),
     reason: z.string(),
+    withdrawnSteerClientMessageIds: z.array(z.string()).optional(), // PATCH(steer-delivery)
   }),
   z.object({
     type: z.literal("timeline"),

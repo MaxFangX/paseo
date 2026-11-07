@@ -478,6 +478,10 @@ export function wrapSessionProvider(provider: AgentProvider, inner: AgentSession
     revertBoth: inner.revertBoth?.bind(inner),
     forkConversation: inner.forkConversation?.bind(inner), // PATCH(native-fork)
     moveConversation: inner.moveConversation?.bind(inner), // PATCH(agent-move)
+    // PATCH(steer-delivery)
+    get defersSteerEcho() {
+      return inner.defersSteerEcho;
+    },
     tryHandleOutOfBand: inner.tryHandleOutOfBand?.bind(inner),
   } satisfies ForwardedAgentSession;
 }

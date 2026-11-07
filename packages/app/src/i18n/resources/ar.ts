@@ -165,6 +165,8 @@ export const ar: TranslationResources = {
       sendQueuedMessageNow: "إرسال رسالة في قائمة الانتظار الآن",
       steerQueuedMessageNow: "توجيه الدور الجاري", // PATCH(queue-steer)
       interruptQueuedMessageNow: "المقاطعة والإرسال الآن", // PATCH(queue-tooltips)
+      pendingSteerStatus: "لم يُقرأ بعد", // PATCH(steer-delivery)
+      pendingSteerLabel: "توجيه لم يقرأه الوكيل بعد: {{text}}", // PATCH(steer-delivery)
       openImage: "فتح مرفق الصورة",
       removeImage: "إزالة مرفق الصورة",
       removeFile: "Remove file attachment",

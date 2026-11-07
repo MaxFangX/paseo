@@ -166,6 +166,8 @@ export const ptBR: TranslationResources = {
       sendQueuedMessageNow: "Enviar mensagem da fila agora",
       steerQueuedMessageNow: "Orientar o turno em andamento", // PATCH(queue-steer)
       interruptQueuedMessageNow: "Interromper e enviar agora", // PATCH(queue-tooltips)
+      pendingSteerStatus: "Ainda não lida", // PATCH(steer-delivery)
+      pendingSteerLabel: "Orientação que o agente ainda não leu: {{text}}", // PATCH(steer-delivery)
       openImage: "Abrir anexo de imagem",
       removeImage: "Remover anexo de imagem",
       removeFile: "Remover anexo de arquivo",

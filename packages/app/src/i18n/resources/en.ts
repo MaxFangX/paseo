@@ -161,6 +161,8 @@ export const en = {
       sendQueuedMessageNow: "Send queued message now",
       steerQueuedMessageNow: "Steer into the running turn", // PATCH(queue-steer)
       interruptQueuedMessageNow: "Interrupt and send now", // PATCH(queue-tooltips)
+      pendingSteerStatus: "Not read yet", // PATCH(steer-delivery)
+      pendingSteerLabel: "Steer the agent has not read yet: {{text}}", // PATCH(steer-delivery)
       openImage: "Open image attachment",
       removeImage: "Remove image attachment",
       removeFile: "Remove file attachment",

@@ -48,6 +48,7 @@ import {
   parseClaudeCodeVersion,
   resolveClaudeDisabledThinkingForModel,
 } from "./model-manifest.js";
+import { DeferredSteers } from "./deferred-steers.js"; // PATCH(steer-delivery)
 import { parsePartialJsonObject } from "./partial-json.js";
 import { withClaudeReplayHistory, type ClaudeReplayHistory } from "./transcript-history.js";
 import { ClaudeSidechainTracker } from "./sidechain-tracker.js";
@@ -2277,6 +2278,9 @@ class ClaudeAgentSession implements AgentSession {
    * let them escape the adapter boundary.
    */
   private readonly unstartedMessageUuids = new Set<string>();
+  /** PATCH(steer-delivery): steers Claude has not started; see deferred-steers.ts. */
+  private readonly deferredSteers = new DeferredSteers();
+  readonly defersSteerEcho = true; // PATCH(steer-delivery)
   /** Human steers whose text has not reached Claude yet and therefore supersede blocking cards. */
   private readonly permissionClearingSteerUuids = new Set<string>();
   private claudeSessionId: string | null;
@@ -2522,6 +2526,7 @@ class ClaudeAgentSession implements AgentSession {
         type: "turn_canceled",
         provider: "claude",
         reason: "Interrupted",
+        ...this.deferredSteers.takeUnread(), // PATCH(steer-delivery)
       });
       // PATCH(claude-resumable-stop): with Task agents alive, an interrupt would mark them
       // user-stopped for good. Retire the process instead; the turn above is already settled.
@@ -2597,6 +2602,13 @@ class ClaudeAgentSession implements AgentSession {
       return { status: "unavailable" };
     }
     this.enqueueSteer(input, message, options.clearPendingPermissions === true);
+    // PATCH(steer-delivery)
+    this.deferredSteers.hold({
+      uuid: message.uuid,
+      prompt,
+      clientMessageId: options.clientMessageId,
+      turnId: options.expectedTurnId,
+    });
     return { status: "accepted" };
   }
 
@@ -4630,6 +4642,7 @@ class ClaudeAgentSession implements AgentSession {
     }
 
     this.forgetStartedMessage(message);
+    this.echoStartedSteer(message, events); // PATCH(steer-delivery)
 
     switch (message.type) {
       case "system":
@@ -4661,6 +4674,17 @@ class ClaudeAgentSession implements AgentSession {
     }
 
     return events;
+  }
+
+  // PATCH(steer-delivery): records a steer's row where Claude read it; see deferred-steers.ts.
+  private echoStartedSteer(message: unknown, events: AgentStreamEvent[]): void {
+    const lifecycle = readClaudeCommandLifecycle(message);
+    if (!lifecycle) return;
+    const echo = this.deferredSteers.settle(
+      lifecycle,
+      this.activeForegroundTurnId ?? this.autonomousTurn?.id,
+    );
+    if (echo) events.push(echo);
   }
 
   /**
