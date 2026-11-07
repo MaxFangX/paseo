@@ -722,7 +722,7 @@ function QueuedMessageRow({
           accessibilityLabel={steerNowLabel}
           accessibilityRole="button"
         >
-          <ThemedCornerDownRight size={ICON_SIZE.sm} uniProps={iconAccentForegroundMapping} />
+          <ThemedCornerDownRight size={ICON_SIZE.sm} uniProps={iconForegroundMapping} />
         </QueueActionButton>
         <QueueActionButton
           tooltip={sendNowTooltip} // PATCH(queue-tooltips)
