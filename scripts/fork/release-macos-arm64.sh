@@ -15,7 +15,8 @@
 # zip live on GitHub, and a ~900MB .app per release worktree adds up. Dry runs
 # and failed publishes keep it for inspection and for --skip-build retries.
 #
-# The release (and its tag) is named maxfangx-<branch>-<YYYY_MM_DD> (UTC date).
+# The release (and its tag) is named maxfangx-<branch>-<YYYY_MM_DD> (UTC date),
+# with -2, -3, ... appended for later releases that day.
 # A leading "maxfangx-" on the branch is not doubled, so branch
 # maxfangx-v0.4.0-beta.2 releases as maxfangx-v0.4.0-beta.2-<date>.
 #
@@ -57,6 +58,15 @@ REPO="${PASEO_FORK_RELEASE_REPO:-MaxFangX/paseo}"
 RELEASE_NAME="maxfangx-${BRANCH#maxfangx-}-$(date -u +%Y_%m_%d)"
 RELEASE_NAME="${RELEASE_NAME//\//-}"
 COMMIT="$(git rev-parse "${COMMIT:-HEAD}")"
+
+# A tag already at $COMMIT keeps its name, so a retried publish replaces that
+# release's assets.
+base_name="$RELEASE_NAME" n=1
+while tagged="$(gh api "repos/$REPO/commits/$RELEASE_NAME" --jq .sha 2> /dev/null)" &&
+  [[ "$tagged" != "$COMMIT" ]]; do
+  n=$((n + 1))
+  RELEASE_NAME="$base_name-$n"
+done
 
 RELEASE_DIR="packages/desktop/release"
 APP="$RELEASE_DIR/mac-arm64/Paseo.app"
