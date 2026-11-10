@@ -56,11 +56,12 @@ export async function openFinishObservation(
   resolver: ObservationScope,
   record: FinishSubscription,
   signal: AbortSignal,
+  initial = true, // PATCH(repeat-finish)
 ): Promise<FinishObservationSession> {
   signal.throwIfAborted();
   const controller = new AbortController();
   const lifetime = AbortSignal.any([signal, controller.signal]);
-  const buffer = createObservationBuffer(lifetime);
+  const buffer = createObservationBuffer(lifetime, initial);
   let opened!: () => void;
   let failed!: (error: unknown) => void;
   const ready = new Promise<void>((resolve, reject) => {
@@ -80,13 +81,14 @@ export async function openFinishObservation(
         opened();
         // The ordinary wait supplies the initial settled snapshot and covers queued admission.
         // Continuous observation buffers checkpoints and terminal events throughout delivery.
-        void host
-          .wait(record.childAgentId, lifetime)
-          .then((result) => {
-            buffer.pushInitial(result);
-            return undefined;
-          })
-          .catch((error) => buffer.fail(error));
+        if (initial)
+          void host
+            .wait(record.childAgentId, lifetime)
+            .then((result) => {
+              buffer.pushInitial(result);
+              return undefined;
+            })
+            .catch((error) => buffer.fail(error));
         try {
           if (!lifetime.aborted)
             await new Promise<void>((resolve) =>

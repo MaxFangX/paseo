@@ -3568,6 +3568,12 @@ class HeldTurnAgentSession implements AgentSession {
     return { turnId };
   }
 
+  // PATCH(repeat-finish): a turn without a prompt, as when a background task wakes the agent.
+  startAutonomousTurn(): void {
+    this.activeTurnId = randomUUID();
+    this.pushEvent({ type: "turn_started", provider: this.provider, turnId: this.activeTurnId });
+  }
+
   finishTurn(finalText?: string): void {
     const turnId = this.activeTurnId;
     if (!turnId) {
@@ -4392,6 +4398,63 @@ describe("send_agent_prompt MCP tool", () => {
       expect(parseAgentMessage(parentClient.sessions[0]!.prompts[0])).toMatchObject({
         source: { kind: "agent-notification", agentId: childId, event: "finished" },
       });
+    } finally {
+      await removeAgentStateDir(agentManager, storage, workdir);
+    }
+  });
+
+  // PATCH(repeat-finish)
+  it("notifies the caller of a created child's later autonomous turns", async () => {
+    const workdir = await mkdtemp(join(tmpdir(), "mcp-repeat-finish-"));
+    const storage = new AgentStorage(join(workdir, "agents"), logger);
+    const parentClient = new HeldTurnAgentClient("claude", false);
+    const childClient = new HeldTurnAgentClient("codex", true);
+    const agentManager = new AgentManager({
+      clients: { claude: parentClient, codex: childClient },
+      registry: storage,
+      logger,
+    });
+
+    try {
+      const parent = await agentManager.createAgent(
+        { provider: "claude", cwd: existingCwd },
+        undefined,
+        { workspaceId: "wks_parent" },
+      );
+      const server = await createAgentMcpServer({
+        agentManager,
+        agentStorage: storage,
+        callerAgentId: parent.id,
+        providerSnapshotManager: createOpenCodeManager().manager,
+        logger,
+      });
+      const created = await invokeToolWithParsedInput(registeredTool(server, "create_agent"), {
+        relationship: { kind: "subagent" },
+        workspace: { kind: "current" },
+        title: "Waiting Child",
+        provider: "codex/gpt-5.4",
+        initialPrompt: "Start a build in the background",
+      });
+      const childId = z.object({ agentId: z.string() }).parse(created.structuredContent).agentId;
+      await vi.waitFor(() => expect(agentManager.getAgent(childId)?.lifecycle).toBe("running"));
+      const childSession = childClient.sessions[0]!;
+      function finishNotifications() {
+        return (parentClient.sessions[0]?.prompts ?? []).filter((prompt) =>
+          prompt.includes(`Agent ${childId} (Waiting Child) finished.`),
+        );
+      }
+
+      childSession.finishTurn("Build started; waiting");
+      await vi.waitFor(() => expect(finishNotifications()).toHaveLength(1));
+      childSession.startAutonomousTurn();
+      await vi.waitFor(() => expect(agentManager.getAgent(childId)?.lifecycle).toBe("running"));
+      childSession.finishTurn("Build passed");
+      await vi.waitFor(() => expect(finishNotifications()).toHaveLength(2));
+      expect(finishNotifications()[1]).toContain("Build passed");
+
+      await agentManager.closeAgent(childId);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(parentClient.sessions[0]!.prompts).toHaveLength(2);
     } finally {
       await removeAgentStateDir(agentManager, storage, workdir);
     }

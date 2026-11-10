@@ -99,5 +99,8 @@ export function createFinishObservation(input: {
       },
     },
   });
-  return { open: (record, signal) => openFinishObservation(resolver, record, signal) };
+  return {
+    open: (record, signal, options) =>
+      openFinishObservation(resolver, record, signal, options?.initial), // PATCH(repeat-finish)
+  };
 }

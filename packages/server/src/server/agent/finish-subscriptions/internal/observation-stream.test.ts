@@ -56,13 +56,14 @@ function permission(id: string): AgentStreamEvent {
     request: { id, provider: "codex", name: "Write", kind: "tool", input: { path: id } },
   };
 }
-async function scenario() {
+async function scenario(initial?: boolean) {
   const host = new Host();
   const controller = new AbortController();
   const observation = await openFinishObservation(
     { use: async (_server, action) => action(host) },
     { id: "watch", callerAgentId: "parent", childAgentId: "child" },
     controller.signal,
+    initial, // PATCH(repeat-finish)
   );
   return { host, observation, controller };
 }
@@ -141,6 +142,19 @@ test("late initial permission snapshot cannot resurrect an already resolved requ
     await Promise.resolve();
     host.emit("idle", { type: "turn_completed", provider: "codex" });
     expect((await observation.next()).status).toBe("idle");
+  } finally {
+    await observation.close();
+  }
+});
+
+// PATCH(repeat-finish)
+test("a session without the initial wait reports only outcomes after opening", async () => {
+  const { host, observation } = await scenario(false);
+  try {
+    host.baseline.resolve({ status: "idle", final: null, lastMessage: "Settled", error: null });
+    await host.baseline.promise;
+    host.emit("idle", { type: "turn_completed", provider: "codex" });
+    expect(await observation.next()).toMatchObject({ lastMessage: "Last response" });
   } finally {
     await observation.close();
   }

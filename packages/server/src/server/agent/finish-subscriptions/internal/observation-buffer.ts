@@ -5,11 +5,11 @@ export type FinishObservationResult = WaitForFinishResult & {
 };
 
 /** Coalesces duplicate checkpoints and retains one terminal result while delivery is pending. */
-export function createObservationBuffer(signal: AbortSignal) {
+export function createObservationBuffer(signal: AbortSignal, initial = true) {
   const delivered = new Set<string>();
   const permissions = new Map<string, FinishObservationResult>();
   const resolvedBeforeInitial = new Set<string>();
-  let initialPending = true;
+  let initialPending = initial; // PATCH(repeat-finish)
   let terminal: FinishObservationResult | undefined;
   let failure: unknown;
   let wake: (() => void) | undefined;

@@ -29,8 +29,10 @@ class Observation implements FinishObservation {
   permission = deferred<void>();
   opening: Promise<void> = Promise.resolve();
   openedSignals: AbortSignal[] = [];
-  async open(_record: unknown, signal: AbortSignal) {
+  initials: boolean[] = []; // PATCH(repeat-finish)
+  async open(_record: unknown, signal: AbortSignal, options?: { initial?: boolean }) {
     this.openedSignals.push(signal);
+    this.initials.push(options?.initial ?? true);
     await this.opening;
     return { next: () => this.wait(signal), close: async () => {} };
   }
@@ -390,13 +392,40 @@ test("failed removal after dispatch acknowledgment retries only storage, preserv
   const state = await scenario(undefined, 1);
   await state.service.register(intent);
   await until(() => state.observation.waits.length === 1);
-  state.observation.waits[0]!.result.resolve(outcome("idle"));
+  // PATCH(repeat-finish): a closed child, since a finished one stays observed.
+  state.observation.waits[0]!.result.resolve(outcome());
   await until(() => state.delivery.prompts.length === 1);
   state.delivery.acknowledgments[0]!.resolve("steered");
   await expect.poll(async () => (await state.store.list()).length).toBe(0);
   expect(state.delivery.prompts).toHaveLength(1);
-  expect(state.delivery.prompts[0]).toContain("finished.");
+  expect(state.delivery.prompts[0]).toContain("was closed.");
   expect(state.observation.waits).toHaveLength(1);
+});
+
+// PATCH(repeat-finish)
+test("later turns notify without a new prompt until the child closes", async () => {
+  const state = await scenario();
+  await state.service.register(intent);
+  await until(() => state.observation.waits.length === 1);
+  state.observation.waits[0]!.result.resolve(outcome("idle"));
+  await until(() => state.delivery.prompts.length === 1);
+  // The first finish swaps sessions before delivery, so its duplicates are never observed.
+  expect(state.observation.initials).toEqual([true, false]);
+  state.delivery.acknowledgments[0]!.resolve("steered");
+  await expect.poll(async () => (await state.store.list()).length).toBe(0);
+
+  // A turn that a background task started reports like the prompted one.
+  await until(() => state.observation.waits.length === 2);
+  state.observation.waits[1]!.result.resolve(outcome("idle"));
+  await until(() => state.delivery.prompts.length === 2);
+  expect(state.delivery.prompts[1]).toContain("finished.");
+  state.delivery.acknowledgments[1]!.resolve("steered");
+
+  // Closing a child after its reported finish ends the watch silently.
+  await until(() => state.observation.waits.length === 3);
+  state.observation.waits[2]!.result.resolve(outcome());
+  await until(() => state.observation.waits[2]!.signal.aborted);
+  expect(state.delivery.prompts).toHaveLength(2);
 });
 
 test("shutdown during observation setup owns rejection of the already-canceled next result", async () => {

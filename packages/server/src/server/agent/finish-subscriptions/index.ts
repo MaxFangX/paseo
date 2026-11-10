@@ -31,7 +31,12 @@ export interface FinishObservationSession {
   close(): Promise<void>;
 }
 export interface FinishObservation {
-  open(subscription: FinishSubscription, signal: AbortSignal): Promise<FinishObservationSession>;
+  open(
+    subscription: FinishSubscription,
+    signal: AbortSignal,
+    // PATCH(repeat-finish): `initial: false` reports only outcomes after opening.
+    options?: { initial?: boolean },
+  ): Promise<FinishObservationSession>;
 }
 interface Dependencies extends FinishObservation {
   store: FinishSubscriptionStore;
@@ -163,6 +168,11 @@ export function createFinishSubscriptions(deps: Dependencies): FinishSubscriptio
     if (result.status === "permission") return "needs permission";
     return result.reason ?? "finished";
   }
+  // PATCH(repeat-finish): the child may run more turns without a new prompt.
+  function endsTurn(result: FinishObservationResult): boolean {
+    const reason = reasonFor(result);
+    return reason === "finished" || reason === "was canceled";
+  }
   async function deliver(
     record: FinishSubscription,
     result: FinishObservationResult,
@@ -223,14 +233,24 @@ export function createFinishSubscriptions(deps: Dependencies): FinishSubscriptio
     let observation: FinishObservationSession | undefined;
     let pending: FinishObservationResult | undefined;
     let acknowledged = false;
+    let later = false; // PATCH(repeat-finish)
     let remoteFailures = 0;
     let retries = 0;
     let warned = false;
     async function observeNext(): Promise<FinishObservationResult | undefined> {
       try {
-        observation ??= await deps.open(record, signal);
+        observation ??= await deps.open(record, signal, { initial: !later });
         const result = await abortable(observation.next(), signal);
         remoteFailures = 0;
+        // PATCH(repeat-finish): after the first finish, keep watching for turns the child starts
+        // on its own, such as one its background task wakes. This session may report the finished
+        // turn again, so swap it before delivery for one that reports only later outcomes. A
+        // failed open is retried by the next call.
+        if (!later && endsTurn(result)) {
+          later = true;
+          await observation.close();
+          observation = await deps.open(record, signal, { initial: false }).catch(() => undefined);
+        }
         return result;
       } catch (error) {
         await observation?.close();
@@ -265,17 +285,24 @@ export function createFinishSubscriptions(deps: Dependencies): FinishSubscriptio
           if (signal.aborted) return;
           await decisions(group);
           if (signal.aborted) return;
-          if (await suppressed(record, pending)) {
+          // PATCH(repeat-finish): closing a child after its reported finish is deliberate.
+          const closedLater = later && reasonFor(pending) === "was closed";
+          if (closedLater || (await suppressed(record, pending))) {
             await remove(watch);
             stop(watch, group);
             return;
           }
           if (!acknowledged) acknowledged = await deliver(record, pending, permissions, signal);
-          if (acknowledged) {
+          if (acknowledged && !endsTurn(pending)) {
             // A removal failure retries only the commit, never the already accepted callback.
             await remove(watch);
             stop(watch, group);
             return;
+          }
+          // PATCH(repeat-finish): after a turn ends, keep watching, in memory only.
+          if (acknowledged) {
+            await remove(watch);
+            acknowledged = false;
           }
           pending = undefined;
           retries = 0;
