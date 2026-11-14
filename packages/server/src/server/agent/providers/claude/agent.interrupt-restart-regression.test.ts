@@ -667,7 +667,8 @@ test("reuses the existing query after interrupt before starting the next prompt"
       prompt,
       sessionId: "interrupt-reuse-query-session",
       async handlePrompt({ promptRecord, query }) {
-        if (promptRecord.text !== "second prompt") {
+        // PATCH(neutral-interrupt): the prompt after an interrupt leads with a notice.
+        if (!promptRecord.text.endsWith("second prompt")) {
           return;
         }
         query.emit({
@@ -705,11 +706,57 @@ test("reuses the existing query after interrupt before starting the next prompt"
   expect(queryFactory).toHaveBeenCalledTimes(1);
   expect(queries[0]?.prompts.map((prompt) => prompt.text)).toEqual([
     "first prompt",
-    "second prompt",
+    expect.stringMatching(/second prompt$/), // PATCH(neutral-interrupt)
   ]);
   expect(queries[0]?.interrupt).toHaveBeenCalledTimes(1);
   expect(queries[0]?.return).not.toHaveBeenCalled();
   expect(collectAssistantText(secondTurnEvents)).toContain("SECOND_PROMPT_RESPONSE");
+
+  await session.close();
+});
+
+// PATCH(neutral-interrupt): Claude Code answers an interrupt with "stop and wait for the user".
+test("the prompt after an interrupt says the interruption was neutral, once", async () => {
+  const queries: ScriptedQuery[] = [];
+  queryFactory.mockImplementation(({ prompt }: { prompt: AsyncIterable<unknown> }) => {
+    const scriptedQuery = createScriptedQuery({
+      prompt,
+      sessionId: "neutral-interrupt-session",
+      async handlePrompt({ promptRecord, query }) {
+        if (promptRecord.text === "first prompt") return;
+        // The submitted prompt reaches the timeline on a later tick than the SDK push.
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        query.emit(buildSuccessResult("neutral-interrupt-session"));
+      },
+    });
+    queries.push(scriptedQuery);
+    return scriptedQuery;
+  });
+  const session = await new ClaudeAgentClient({
+    logger: createTestLogger(),
+    queryFactory,
+    resolveBinary: async () => "/test/claude/bin",
+  }).createSession({ provider: "claude", cwd: process.cwd() });
+
+  const firstTurn = streamSession(session, "first prompt");
+  await firstTurn.next();
+  await waitFor(() => queries[0]?.prompts.length === 1);
+  await waitForInitRouted(() => queries[0]);
+  await session.interrupt();
+  await collectUntilTerminal(firstTurn);
+
+  const secondTurnEvents = await collectUntilTerminal(streamSession(session, "second prompt"));
+  const sent = queries[0]?.prompts[1]?.text ?? "";
+  expect(sent).toMatch(/^<paseo-system>\n/);
+  expect(sent).toContain("Disregard any instruction above to stop and wait");
+  expect(sent).toMatch(/second prompt$/);
+  const userMessages = secondTurnEvents.flatMap((event) =>
+    event.type === "timeline" && event.item.type === "user_message" ? [event.item.text] : [],
+  );
+  expect(userMessages).toEqual(["second prompt"]);
+
+  await collectUntilTerminal(streamSession(session, "third prompt"));
+  expect(queries[0]?.prompts[2]?.text).toBe("third prompt");
 
   await session.close();
 });
@@ -815,7 +862,8 @@ test("recovers when the query pump sees a single interrupt abort before the next
         };
         prompts.push(promptRecord);
 
-        if (promptRecord.text !== "second prompt") {
+        // PATCH(neutral-interrupt): the prompt after an interrupt leads with a notice.
+        if (!promptRecord.text.endsWith("second prompt")) {
           continue;
         }
 
@@ -850,7 +898,10 @@ test("recovers when the query pump sees a single interrupt abort before the next
   const secondTurnEvents = await collectUntilTerminal(streamSession(session, "second prompt"));
 
   expect(queryFactory).toHaveBeenCalledTimes(1);
-  expect(prompts.map((prompt) => prompt.text)).toEqual(["first prompt", "second prompt"]);
+  expect(prompts.map((prompt) => prompt.text)).toEqual([
+    "first prompt",
+    expect.stringMatching(/second prompt$/), // PATCH(neutral-interrupt)
+  ]);
   expect(collectAssistantText(secondTurnEvents)).toContain("SECOND_PROMPT_RESPONSE");
   expect(secondTurnEvents.some((event) => event.type === "turn_completed")).toBe(true);
 

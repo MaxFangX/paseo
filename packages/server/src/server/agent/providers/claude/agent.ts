@@ -3,6 +3,7 @@ import {
   formatSystemNotificationPrompt,
   isSystemInjectedEnvelope,
 } from "../../agent-messages/index.js"; // PATCH(claude-resumable-stop)
+import { INTERRUPT_NOTICE, prependNotice } from "./prompt-notices.js"; // PATCH(neutral-interrupt)
 import type { ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -2350,6 +2351,8 @@ class ClaudeAgentSession implements AgentSession {
   private queryRestartNeeded = false;
   private retireInFlight: Promise<void> | null = null;
   private suspendedTasks: SuspendedTask[] = [];
+  /** PATCH(neutral-interrupt): an SDK interrupt was sent, so the next prompt corrects its note. */
+  private interruptNoticePending = false;
   private pendingInterruptAbort = false;
   /**
    * Whether Claude's main session is inside one of its own turns: set by system/init and by a
@@ -2494,6 +2497,11 @@ class ClaudeAgentSession implements AgentSession {
 
     const sdkMessage = this.toSdkUserMessage(prompt);
     this.prependSuspendedTasksNotice(sdkMessage);
+    // PATCH(neutral-interrupt)
+    if (this.interruptNoticePending) {
+      this.interruptNoticePending = false;
+      prependNotice(sdkMessage, formatSystemNotificationPrompt(INTERRUPT_NOTICE));
+    }
     const sdkUserMessageId =
       typeof sdkMessage.uuid === "string" && sdkMessage.uuid.length > 0 ? sdkMessage.uuid : null;
     this.rememberRewindUserAnchor(sdkUserMessageId);
@@ -2697,15 +2705,7 @@ class ClaudeAgentSession implements AgentSession {
         ...lines,
       ].join("\n"),
     );
-    const content = message.message.content;
-    if (typeof content === "string") {
-      message.message.content = [
-        { type: "text", text: notice },
-        { type: "text", text: content },
-      ];
-      return;
-    }
-    content.unshift({ type: "text", text: notice });
+    prependNotice(message, notice);
   }
 
   async *streamHistory(): AsyncGenerator<AgentStreamEvent> {
@@ -4554,6 +4554,7 @@ class ClaudeAgentSession implements AgentSession {
       if (await this.withdrawUnstartedMessages(queryToInterrupt)) return;
       this.pendingInterruptAbort = true;
     }
+    this.interruptNoticePending = true; // PATCH(neutral-interrupt)
     try {
       await this.awaitWithTimeout(
         queryToInterrupt.interrupt(),
