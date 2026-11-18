@@ -428,6 +428,22 @@ test("later turns notify without a new prompt until the child closes", async () 
   expect(state.delivery.prompts).toHaveLength(2);
 });
 
+// PATCH(repeat-finish)
+test("a caller that is not the child's parent hears of one turn per prompt", async () => {
+  const state = await scenario();
+  await state.service.register({ callerAgentId: "peer", childAgentId: "child" });
+  await until(() => state.observation.waits.length === 1);
+  state.observation.waits[0]!.result.resolve(outcome("idle"));
+  await until(() => state.delivery.prompts.length === 1);
+  state.delivery.acknowledgments[0]!.resolve("steered");
+
+  // The watch ends there: no session opens for the child's later turns.
+  await until(() => state.observation.waits[0]!.signal.aborted);
+  expect((await state.store.list()).length).toBe(0);
+  expect(state.observation.initials).toEqual([true]);
+  expect(state.observation.waits).toHaveLength(1);
+});
+
 test("shutdown during observation setup owns rejection of the already-canceled next result", async () => {
   const state = await scenario();
   const opening = deferred<void>();

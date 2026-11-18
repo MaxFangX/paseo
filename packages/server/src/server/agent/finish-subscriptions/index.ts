@@ -168,10 +168,17 @@ export function createFinishSubscriptions(deps: Dependencies): FinishSubscriptio
     if (result.status === "permission") return "needs permission";
     return result.reason ?? "finished";
   }
-  // PATCH(repeat-finish): the child may run more turns without a new prompt.
-  function endsTurn(result: FinishObservationResult): boolean {
+  // PATCH(repeat-finish): a child may run more turns without a new prompt, and its parent hears of
+  // each one. Any other caller hears of one turn per prompt: a peer's later turns answer to other
+  // prompts, and two peers left watching each other would wake each other without end.
+  function repeats(record: FinishSubscription, result: FinishObservationResult): boolean {
     const reason = reasonFor(result);
-    return reason === "finished" || reason === "was canceled";
+    if (reason !== "finished" && reason !== "was canceled") return false;
+    const parent = getParentAddressFromLabels(
+      result.final?.labels,
+      record.serverId ?? deps.serverId,
+    );
+    return parent?.agentId === record.callerAgentId && parent.serverId === deps.serverId;
   }
   async function deliver(
     record: FinishSubscription,
@@ -246,7 +253,7 @@ export function createFinishSubscriptions(deps: Dependencies): FinishSubscriptio
         // on its own, such as one its background task wakes. This session may report the finished
         // turn again, so swap it before delivery for one that reports only later outcomes. A
         // failed open is retried by the next call.
-        if (!later && endsTurn(result)) {
+        if (!later && repeats(record, result)) {
           later = true;
           await observation.close();
           observation = await deps.open(record, signal, { initial: false }).catch(() => undefined);
@@ -293,7 +300,7 @@ export function createFinishSubscriptions(deps: Dependencies): FinishSubscriptio
             return;
           }
           if (!acknowledged) acknowledged = await deliver(record, pending, permissions, signal);
-          if (acknowledged && !endsTurn(pending)) {
+          if (acknowledged && !repeats(record, pending)) {
             // A removal failure retries only the commit, never the already accepted callback.
             await remove(watch);
             stop(watch, group);

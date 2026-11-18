@@ -4460,6 +4460,62 @@ describe("send_agent_prompt MCP tool", () => {
     }
   });
 
+  // PATCH(repeat-finish)
+  it("notifies a prompting peer of one turn, not of the agent's later ones", async () => {
+    const workdir = await mkdtemp(join(tmpdir(), "mcp-peer-finish-"));
+    const storage = new AgentStorage(join(workdir, "agents"), logger);
+    const callerClient = new HeldTurnAgentClient("claude", false);
+    const peerClient = new HeldTurnAgentClient("codex", true);
+    const agentManager = new AgentManager({
+      clients: { claude: callerClient, codex: peerClient },
+      registry: storage,
+      logger,
+    });
+
+    try {
+      const caller = await agentManager.createAgent(
+        { provider: "claude", cwd: existingCwd },
+        undefined,
+        { workspaceId: "wks_caller" },
+      );
+      const peer = await agentManager.createAgent(
+        { provider: "codex", cwd: existingCwd },
+        undefined,
+        { workspaceId: "wks_peer" },
+      );
+      const server = await createAgentMcpServer({
+        agentManager,
+        agentStorage: storage,
+        callerAgentId: caller.id,
+        providerSnapshotManager: createOpenCodeManager().manager,
+        logger,
+      });
+      const peerSession = peerClient.sessions[0]!;
+      function callerPrompts() {
+        return callerClient.sessions[0]!.prompts;
+      }
+
+      await invokeToolWithParsedInput(registeredTool(server, "send_agent_prompt"), {
+        agentId: peer.id,
+        prompt: "A question",
+      });
+      await vi.waitFor(() => expect(agentManager.getAgent(peer.id)?.lifecycle).toBe("running"));
+      peerSession.finishTurn("An answer");
+      await vi.waitFor(() => expect(callerPrompts()).toHaveLength(1));
+      expect(callerPrompts()[0]).toContain("An answer");
+
+      // The peer's own work goes on, and the caller hears no more of it.
+      peerSession.startAutonomousTurn();
+      await vi.waitFor(() => expect(agentManager.getAgent(peer.id)?.lifecycle).toBe("running"));
+      peerSession.finishTurn("Other work");
+      await vi.waitFor(() => expect(agentManager.getAgent(peer.id)?.lifecycle).toBe("idle"));
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(callerPrompts()).toHaveLength(1);
+    } finally {
+      await removeAgentStateDir(agentManager, storage, workdir);
+    }
+  });
+
   it("reports queue admission before the background prompt starts", async () => {
     const workdir = await mkdtemp(join(tmpdir(), "mcp-background-send-status-"));
     const storage = new AgentStorage(join(workdir, "agents"), logger);
