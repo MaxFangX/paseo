@@ -130,4 +130,30 @@ describe("runLsCommand", () => {
 
     expect(result.data.map((item) => item.name)).toEqual(["agent 3", "agent 2", "agent 1"]);
   });
+
+  // PATCH(ls-context-usage)
+  it("reports each agent's context usage, null when the daemon has none", async () => {
+    const daemon = createPagingClient();
+    const client = {
+      ...daemon,
+      fetchAgents: async (...args: Parameters<typeof daemon.fetchAgents>) => {
+        const page = await daemon.fetchAgents(...args);
+        for (const { agent } of page.entries) {
+          if (agent.title === "agent 3")
+            agent.lastUsage = { contextWindowUsedTokens: 120_000, contextWindowMaxTokens: 500_000 };
+        }
+        return page;
+      },
+    };
+
+    const result = await listAgents({ daemonTarget, all: true, global: true }, async () => client);
+
+    expect(
+      result.data.map((item) => [item.contextWindowUsedTokens, item.contextWindowMaxTokens]),
+    ).toEqual([
+      [120_000, 500_000],
+      [null, null],
+      [null, null],
+    ]);
+  });
 });

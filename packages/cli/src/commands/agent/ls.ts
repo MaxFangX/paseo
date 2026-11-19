@@ -35,6 +35,9 @@ export interface AgentListItem {
   status: string;
   cwd: string;
   created: string;
+  // PATCH(ls-context-usage): from the agent's last turn, null when the daemon has no usage for it.
+  contextWindowUsedTokens: number | null;
+  contextWindowMaxTokens: number | null;
 }
 
 /** Helper to get relative time string */
@@ -101,6 +104,8 @@ function toListItem(agent: AgentSnapshotPayload): AgentListItem {
     status: agent.status,
     cwd: shortenPath(agent.cwd),
     created: relativeTime(agent.createdAt),
+    contextWindowUsedTokens: agent.lastUsage?.contextWindowUsedTokens ?? null, // PATCH(ls-context-usage)
+    contextWindowMaxTokens: agent.lastUsage?.contextWindowMaxTokens ?? null,
   };
 }
 
