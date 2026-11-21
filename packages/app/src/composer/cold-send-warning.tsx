@@ -55,7 +55,11 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
+    // On the input's text rails: the border and padding of inputWrapper in input/input.tsx.
+    paddingHorizontal: {
+      xs: theme.borderWidth[1] + theme.spacing[3],
+      md: theme.borderWidth[1] + theme.spacing[4],
+    },
   },
   text: {
     flex: 1,

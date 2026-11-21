@@ -31,7 +31,7 @@ import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sideba
 import { DensityIcon } from "@/components/ui/density-icon";
 import { TrailingActionScrim } from "@/components/ui/trailing-action-scrim";
 import { useWorkspaceLabelDefinitions } from "@/workspace-labels";
-import { WorkspaceCacheStateBadge } from "@/components/cache-state-badge"; // PATCH(cache-state)
+import { WorkspaceTitleWithCacheState } from "@/components/cache-state-badge"; // PATCH(cache-state)
 
 const needsInputColorMapping = (theme: Theme) => ({
   color: theme.colors.surface0,
@@ -157,14 +157,15 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
         )}
         <View style={styles.workspaceContentColumn}>
           <View style={styles.workspaceTitleRow}>
-            <Text style={workspaceBranchTextStyle} numberOfLines={1}>
-              {workspaceLabel}
-            </Text>
             {/* PATCH(cache-state) */}
-            <WorkspaceCacheStateBadge
+            <WorkspaceTitleWithCacheState
               serverId={workspace.serverId}
               workspaceId={workspace.workspaceId}
-            />
+            >
+              <Text style={workspaceBranchTextStyle} numberOfLines={1}>
+                {workspaceLabel}
+              </Text>
+            </WorkspaceTitleWithCacheState>
             <View style={sidebarWorkspaceRowStyles.rowRight}>{children}</View>
           </View>
           <WorkspaceMetaRow

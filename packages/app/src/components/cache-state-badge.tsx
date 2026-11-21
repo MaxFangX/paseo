@@ -1,5 +1,5 @@
-import { memo } from "react";
-import { Text } from "react-native";
+import { memo, type ReactNode } from "react";
+import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useCacheState } from "@/hooks/use-cache-state";
 import { useSessionStore, type Agent } from "@/stores/session-store";
@@ -36,7 +36,7 @@ export const AgentCacheStateBadge = memo(function AgentCacheStateBadge({
  * A workspace row stands for several agents; it shows the one with the most context, since that
  * is the one that costs the most to wake.
  */
-export const WorkspaceCacheStateBadge = memo(function WorkspaceCacheStateBadge({
+const WorkspaceCacheStateBadge = memo(function WorkspaceCacheStateBadge({
   serverId,
   workspaceId,
 }: {
@@ -48,6 +48,27 @@ export const WorkspaceCacheStateBadge = memo(function WorkspaceCacheStateBadge({
   );
   return agent ? <CacheStateLabel agent={agent} testID="workspace-cache-state" /> : null;
 });
+
+/**
+ * A workspace row's name, then its {@link WorkspaceCacheStateBadge} where the name leaves room. A
+ * badge that does not fit wraps onto a second line, which is clipped, so it never cuts the name.
+ */
+export function WorkspaceTitleWithCacheState({
+  serverId,
+  workspaceId,
+  children,
+}: {
+  serverId: string;
+  workspaceId: string;
+  children: ReactNode;
+}) {
+  return (
+    <View style={styles.workspaceTitle}>
+      <View style={styles.workspaceName}>{children}</View>
+      <WorkspaceCacheStateBadge serverId={serverId} workspaceId={workspaceId} />
+    </View>
+  );
+}
 
 function selectLargestClaudeAgent(
   agents: ReadonlyMap<string, Agent> | undefined,
@@ -66,12 +87,31 @@ function usedTokens(agent: Agent): number {
   return agent.lastUsage?.contextWindowUsedTokens ?? 0;
 }
 
+// The sidebar row title's line height, TITLE_LINE_HEIGHT in sidebar-workspace-row-content.tsx.
+const LINE_HEIGHT = 20;
+
 const styles = StyleSheet.create((theme) => ({
+  workspaceTitle: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    columnGap: theme.spacing[2],
+    height: LINE_HEIGHT,
+    overflow: "hidden",
+  },
+  // The name's own style is `flex: 1`, with no width of its own; this box gives it the width of its
+  // text, so a long name takes the line before the badge does.
+  workspaceName: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
+  },
   label: {
     flexShrink: 0,
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
-    lineHeight: 20,
+    lineHeight: LINE_HEIGHT,
     fontVariant: ["tabular-nums"],
   },
   costly: {
