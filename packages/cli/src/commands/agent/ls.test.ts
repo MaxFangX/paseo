@@ -156,4 +156,27 @@ describe("runLsCommand", () => {
       [null, null],
     ]);
   });
+
+  // PATCH(cache-state)
+  it("reports when each agent's last turn ended, null when the daemon has no time", async () => {
+    const daemon = createPagingClient();
+    const client = {
+      ...daemon,
+      fetchAgents: async (...args: Parameters<typeof daemon.fetchAgents>) => {
+        const page = await daemon.fetchAgents(...args);
+        for (const { agent } of page.entries) {
+          if (agent.title === "agent 2") agent.lastTurnEndedAt = "2026-11-20T12:00:00.000Z";
+        }
+        return page;
+      },
+    };
+
+    const result = await listAgents({ daemonTarget, all: true, global: true }, async () => client);
+
+    expect(result.data.map((item) => item.lastTurnEndedAt)).toEqual([
+      null,
+      "2026-11-20T12:00:00.000Z",
+      null,
+    ]);
+  });
 });

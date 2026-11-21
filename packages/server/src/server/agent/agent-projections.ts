@@ -25,6 +25,7 @@ import {
   resolveStoredAgentUpdatedAt,
   toAgentPersistenceHandle,
 } from "../persistence-hooks.js";
+import { lastTurnEndedAtIso } from "./cache-state.js"; // PATCH(cache-state)
 export type { ManagedAgent };
 
 interface ProjectionOptions {
@@ -90,6 +91,7 @@ export function toStoredAgentRecord(
     updatedAt: agent.updatedAt.toISOString(),
     lastActivityAt: agent.updatedAt.toISOString(),
     lastUserMessageAt: agent.lastUserMessageAt ? agent.lastUserMessageAt.toISOString() : null,
+    lastTurnEndedAt: lastTurnEndedAtIso(agent), // PATCH(cache-state)
     title: options?.title ?? null,
     labels: agent.labels,
     lastStatus: agent.lifecycle,
@@ -132,6 +134,7 @@ export function toAgentPayload(
     createdAt: agent.createdAt.toISOString(),
     updatedAt: agent.updatedAt.toISOString(),
     lastUserMessageAt: agent.lastUserMessageAt ? agent.lastUserMessageAt.toISOString() : null,
+    lastTurnEndedAt: lastTurnEndedAtIso(agent), // PATCH(cache-state)
     status: agent.lifecycle,
     activeTurn: agent.activeTurnId
       ? {
@@ -246,6 +249,7 @@ export function buildStoredAgentPayload(
     createdAt: createdAt.toISOString(),
     updatedAt: updatedAt.toISOString(),
     lastUserMessageAt: lastUserMessageAt ? lastUserMessageAt.toISOString() : null,
+    lastTurnEndedAt: record.lastTurnEndedAt, // PATCH(cache-state)
     status: record.lastStatus,
     capabilities: defaultCapabilities,
     currentModeId: record.lastModeId ?? null,

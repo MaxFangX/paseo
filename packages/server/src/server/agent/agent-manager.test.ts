@@ -5342,6 +5342,177 @@ test("a compaction turn leaves a read agent read", async () => {
   expect(attention()).toBe(true);
 });
 
+// PATCH(cache-state)
+const TURN_TERMINALS = {
+  completed: (turnId: string): AgentStreamEvent => ({
+    type: "turn_completed",
+    provider: "codex",
+    turnId,
+  }),
+  failed: (turnId: string): AgentStreamEvent => ({
+    type: "turn_failed",
+    provider: "codex",
+    error: "boom",
+    turnId,
+  }),
+  canceled: (turnId: string): AgentStreamEvent => ({
+    type: "turn_canceled",
+    provider: "codex",
+    reason: "interrupted",
+    turnId,
+  }),
+};
+
+// PATCH(cache-state): ends each prompted turn with `terminal`, and replays one ended turn as history.
+class TurnEndSession extends TestAgentSession {
+  terminal: keyof typeof TURN_TERMINALS = "completed";
+
+  override async startTurn(): Promise<{ turnId: string }> {
+    const turnId = `turn-${randomUUID()}`;
+    setTimeout(() => {
+      this.pushEvent({ type: "turn_started", provider: this.provider, turnId });
+      this.pushEvent(TURN_TERMINALS[this.terminal](turnId));
+    }, 0);
+    return { turnId };
+  }
+
+  override async *streamHistory(): AsyncGenerator<AgentStreamEvent> {
+    const turnId = "history-turn";
+    yield { type: "turn_started", provider: this.provider, turnId };
+    yield {
+      type: "timeline",
+      provider: this.provider,
+      turnId,
+      item: { type: "assistant_message", text: "from history" },
+    };
+    yield TURN_TERMINALS.completed(turnId);
+  }
+}
+
+// PATCH(cache-state)
+class TurnEndClient extends TestAgentClient {
+  readonly sessions: TurnEndSession[] = [];
+
+  override async createSession(config: AgentSessionConfig): Promise<AgentSession> {
+    return this.track(new TurnEndSession(config));
+  }
+
+  override async resumeSession(
+    _handle: AgentPersistenceHandle,
+    config?: Partial<AgentSessionConfig>,
+  ): Promise<AgentSession> {
+    return this.track(new TurnEndSession({ provider: "codex", cwd: config?.cwd ?? process.cwd() }));
+  }
+
+  private track(session: TurnEndSession): TurnEndSession {
+    this.sessions.push(session);
+    return session;
+  }
+}
+
+// PATCH(cache-state)
+const TURN_END_T1 = new Date("2026-11-20T12:00:00.000Z");
+const TURN_END_T2 = new Date("2026-11-20T13:30:00.000Z");
+
+// PATCH(cache-state): the clock reads T1 until a test moves it.
+async function setupTurnEndAgent() {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(TURN_END_T1);
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-last-turn-end-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const client = new TurnEndClient();
+  const manager = new AgentManager({ clients: { codex: client }, registry: storage, logger });
+  onTestFinished(async () => {
+    vi.useRealTimers();
+    await storage.flush();
+    rmSync(workdir, { recursive: true, force: true });
+  });
+  const agent = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+    workspaceId: undefined,
+  });
+  return { workdir, storage, manager, session: client.sessions[0]!, agentId: agent.id };
+}
+
+// PATCH(cache-state)
+test.each(["completed", "failed", "canceled"] as const)(
+  "records the end of a %s prompted turn",
+  async (terminal) => {
+    const { manager, session, agentId } = await setupTurnEndAgent();
+    expect(manager.getAgent(agentId)?.lastTurnEndedAt).toBeNull();
+
+    session.terminal = terminal;
+    await manager.runAgent(agentId, "say hello").catch(() => undefined);
+
+    expect(manager.getAgent(agentId)?.lastTurnEndedAt).toEqual(TURN_END_T1);
+  },
+);
+
+// PATCH(cache-state)
+test("records the end of a turn the agent started itself, in the state that reports it idle", async () => {
+  const { manager, session, agentId } = await setupTurnEndAgent();
+  // Not vi.waitFor: under fake timers it advances the clock.
+  const idle = new Promise<ManagedAgent>((resolve) => {
+    manager.subscribe(
+      (event) => {
+        if (event.type === "agent_state" && event.agent.lifecycle === "idle") resolve(event.agent);
+      },
+      { agentId, replayState: false },
+    );
+  });
+
+  session.pushEvent({ type: "turn_started", provider: "codex", turnId: "autonomous-turn" });
+  session.pushEvent(TURN_TERMINALS.completed("autonomous-turn"));
+
+  expect((await idle).lastTurnEndedAt).toEqual(TURN_END_T1);
+});
+
+// PATCH(cache-state)
+test("history replaying an ended turn leaves the last turn end alone", async () => {
+  const { manager, agentId } = await setupTurnEndAgent();
+  await manager.runAgent(agentId, "say hello");
+  vi.setSystemTime(TURN_END_T2);
+
+  await manager.hydrateTimelineFromProvider(agentId, { force: true });
+
+  expect(manager.getTimeline(agentId)).toContainEqual(
+    expect.objectContaining({ type: "assistant_message", text: "from history" }),
+  );
+  expect(manager.getAgent(agentId)?.lastTurnEndedAt).toEqual(TURN_END_T1);
+});
+
+// PATCH(cache-state)
+test("the last turn end survives a reload and a daemon restart", async () => {
+  const { workdir, storage, manager, agentId } = await setupTurnEndAgent();
+  await manager.runAgent(agentId, "say hello");
+  vi.setSystemTime(TURN_END_T2);
+
+  await manager.reloadAgentSession(agentId);
+  expect(manager.getAgent(agentId)?.lastTurnEndedAt).toEqual(TURN_END_T1);
+  expect(toAgentPayload(manager.getAgent(agentId)!).lastTurnEndedAt).toBe(
+    TURN_END_T1.toISOString(),
+  );
+
+  await manager.closeAgent(agentId);
+  await storage.flush();
+  expect((await storage.get(agentId))?.lastTurnEndedAt).toBe(TURN_END_T1.toISOString());
+
+  // A fresh manager and storage over the same records, as after a daemon restart.
+  const restartedStorage = new AgentStorage(join(workdir, "agents"), logger);
+  const restarted = new AgentManager({
+    clients: { codex: new TurnEndClient() },
+    registry: restartedStorage,
+    logger,
+  });
+  const loaded = await ensureAgentLoaded(agentId, {
+    agentManager: restarted,
+    agentStorage: restartedStorage,
+    logger,
+  });
+  expect(loaded.lastTurnEndedAt).toEqual(TURN_END_T1);
+  await restarted.closeAgent(agentId);
+  await restartedStorage.flush();
+});
+
 test("runAgent persists finished attention and idle status without an external snapshot subscriber", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-finished-attention-"));
   const storagePath = join(workdir, "agents");

@@ -845,6 +845,8 @@ export const AgentSnapshotPayloadSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   lastUserMessageAt: z.string().nullable(),
+  // PATCH(cache-state): ISO time the agent's last live turn ended; absent when unknown.
+  lastTurnEndedAt: z.string().nullable().optional(),
   status: AgentStatusSchema,
   activeTurn: AgentActiveTurnPayloadSchema.nullable().optional(),
   capabilities: AgentCapabilityFlagsSchema,

@@ -38,6 +38,7 @@ export interface AgentListItem {
   // PATCH(ls-context-usage): from the agent's last turn, null when the daemon has no usage for it.
   contextWindowUsedTokens: number | null;
   contextWindowMaxTokens: number | null;
+  lastTurnEndedAt: string | null; // PATCH(cache-state): ISO time, null when the daemon has none.
 }
 
 /** Helper to get relative time string */
@@ -106,6 +107,7 @@ function toListItem(agent: AgentSnapshotPayload): AgentListItem {
     created: relativeTime(agent.createdAt),
     contextWindowUsedTokens: agent.lastUsage?.contextWindowUsedTokens ?? null, // PATCH(ls-context-usage)
     contextWindowMaxTokens: agent.lastUsage?.contextWindowMaxTokens ?? null,
+    lastTurnEndedAt: agent.lastTurnEndedAt ?? null, // PATCH(cache-state)
   };
 }
 

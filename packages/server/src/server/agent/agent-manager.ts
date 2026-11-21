@@ -93,6 +93,8 @@ import {
 import { withTimeout } from "../../utils/promise-timeout.js";
 import { extractAttention } from "../persistence-hooks.js";
 import { noteTurnStart } from "./quiet-turns.js"; // PATCH(quiet-compact)
+// PATCH(cache-state)
+import { noteTurnEnd, restoredLastTurnEndedAt, storedLastTurnEndedAt } from "./cache-state.js";
 
 const RELOAD_SESSION_CLOSE_TIMEOUT_MS = 3_000;
 const INTERRUPT_SESSION_TIMEOUT_MS = 2_000;
@@ -435,6 +437,7 @@ interface ManagedAgentBase {
   lastError?: string;
   attention: AttentionState;
   quietTurn?: boolean; // PATCH(quiet-compact): see quiet-turns.ts
+  lastTurnEndedAt?: Date | null; // PATCH(cache-state): see cache-state.ts
   foregroundTurnWaiters: Set<ForegroundTurnWaiter>;
   finalizedForegroundTurnIds: Set<string>;
   unsubscribeSession: (() => void) | null;
@@ -1464,6 +1467,7 @@ export class AgentManager {
     await this.requireExternalMcpSupport(session, storedConfig);
     return this.registerSession(session, storedConfig, resolvedAgentId, {
       ...options,
+      lastTurnEndedAt: storedLastTurnEndedAt(record), // PATCH(cache-state)
       persistence: handle,
       restoring: true,
     });
@@ -1653,6 +1657,7 @@ export class AgentManager {
         createdAt: existing.createdAt,
         updatedAt: existing.updatedAt,
         lastUserMessageAt: existing.lastUserMessageAt,
+        lastTurnEndedAt: existing.lastTurnEndedAt, // PATCH(cache-state)
         historyPrimed: rehydrateFromDisk ? false : preservedHistoryPrimed,
         lastUsage: preservedLastUsage,
         lastError: preservedLastError,
@@ -2036,6 +2041,7 @@ export class AgentManager {
         persistence: record.persistence ?? null,
         historyPrimed: true,
         lastUserMessageAt: record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null,
+        lastTurnEndedAt: storedLastTurnEndedAt(record), // PATCH(cache-state)
         lastUsage: undefined,
         lastError: record.lastError ?? undefined,
         attention,
@@ -2799,6 +2805,7 @@ export class AgentManager {
     fromHistory = false,
   ): ActiveTurnTerminalDisposition {
     if (fromHistory) return "stale";
+    noteTurnEnd(agent); // PATCH(cache-state): every live turn end passes here
     if (!agent.activeTurnId) return "untracked";
     if (turnId && agent.activeTurnId !== turnId) return "stale";
     agent.activeTurnId = null;
@@ -3582,6 +3589,7 @@ export class AgentManager {
       createdAt?: Date;
       updatedAt?: Date;
       lastUserMessageAt?: Date | null;
+      lastTurnEndedAt?: Date | null; // PATCH(cache-state)
       labels?: Record<string, string>;
       timeline?: AgentTimelineItem[];
       timelineRows?: AgentTimelineRow[];
@@ -3771,6 +3779,7 @@ export class AgentManager {
           createdAt?: Date;
           updatedAt?: Date;
           lastUserMessageAt?: Date | null;
+          lastTurnEndedAt?: Date | null; // PATCH(cache-state)
           labels?: Record<string, string>;
           historyPrimed?: boolean;
           lastUsage?: AgentUsage;
@@ -3814,6 +3823,7 @@ export class AgentManager {
       ),
       historyPrimed: options?.historyPrimed ?? durableTimelineHasRows,
       lastUserMessageAt: options?.lastUserMessageAt ?? null,
+      lastTurnEndedAt: restoredLastTurnEndedAt(options), // PATCH(cache-state)
       lastUsage: options?.lastUsage,
       lastError: options?.lastError,
       attention: resolveInitialAttention(options?.attention),
