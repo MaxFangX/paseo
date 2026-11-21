@@ -1,5 +1,6 @@
 import { discoverOmp, piAuthPath, readHarness, type StoreLookup } from "./stores.js";
 import type { UsageInput } from "../shared/input.js";
+import { SESSION_WINDOW_MS, WEEKLY_WINDOW_MS, withRunOut } from "./run-out.js"; // PATCH(usage-run-out)
 import { execFile } from "node:child_process";
 import { existsSync, promises as fs } from "node:fs";
 import { homedir, userInfo } from "node:os";
@@ -119,9 +120,24 @@ const UNSCOPED_WINDOWS: ReadonlyArray<{
   label: string;
   shortLabel: string;
   summary: boolean;
+  windowMs: number; // PATCH(usage-run-out)
 }> = [
-  { field: "five_hour", id: "five_hour", label: "Session", shortLabel: "5h", summary: true },
-  { field: "seven_day", id: "weekly", label: "Weekly", shortLabel: "wk", summary: true },
+  {
+    field: "five_hour",
+    id: "five_hour",
+    label: "Session",
+    shortLabel: "5h",
+    summary: true,
+    windowMs: SESSION_WINDOW_MS,
+  },
+  {
+    field: "seven_day",
+    id: "weekly",
+    label: "Weekly",
+    shortLabel: "wk",
+    summary: true,
+    windowMs: WEEKLY_WINDOW_MS,
+  },
 ];
 
 // Scoped windows from before `limits[]` existed. Declaring the dimension here is what
@@ -257,15 +273,19 @@ function unscopedWindows(resp: ClaudeUsageResponse): UsageWindow[] {
     const window = resp[spec.field];
     if (!window) continue;
     windows.push(
-      windowFromUsedPct({
-        id: spec.id,
-        label: spec.label,
-        shortLabel: spec.shortLabel,
-        summary: spec.summary,
-        utilizationPct: window.utilization,
-        resetsAt: window.resets_at ?? null,
-        tone: toneFromUsedPct(window.utilization),
-      }),
+      // PATCH(usage-run-out)
+      withRunOut(
+        windowFromUsedPct({
+          id: spec.id,
+          label: spec.label,
+          shortLabel: spec.shortLabel,
+          summary: spec.summary,
+          utilizationPct: window.utilization,
+          resetsAt: window.resets_at ?? null,
+          tone: toneFromUsedPct(window.utilization),
+        }),
+        spec.windowMs,
+      ),
     );
   }
   return windows;
@@ -278,7 +298,7 @@ function scopedWindows(limits: ScopedLimit[]): UsageWindow[] {
     taken.add(id);
     // Emitted even at 0% and inactive: a zero bar answers "how much of this model have I
     // used", and the bar must not come and go between refreshes.
-    return windowFromUsedPct({
+    const window = windowFromUsedPct({
       id,
       label: `Weekly \u00b7 ${limit.name}`,
       shortLabel: `wk ${limit.name}`,
@@ -286,6 +306,7 @@ function scopedWindows(limits: ScopedLimit[]): UsageWindow[] {
       resetsAt: limit.resetsAt,
       tone: toneFromUsedPct(limit.usedPct),
     });
+    return withRunOut(window, WEEKLY_WINDOW_MS); // PATCH(usage-run-out)
   });
 }
 
