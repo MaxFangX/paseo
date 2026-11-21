@@ -94,7 +94,12 @@ import { withTimeout } from "../../utils/promise-timeout.js";
 import { extractAttention } from "../persistence-hooks.js";
 import { noteTurnStart } from "./quiet-turns.js"; // PATCH(quiet-compact)
 // PATCH(cache-state)
-import { noteTurnEnd, restoredLastTurnEndedAt, storedLastTurnEndedAt } from "./cache-state.js";
+import {
+  noteTurnEnd,
+  restoredLastTurnEndedAt,
+  storedLastTurnEndedAt,
+  storedLastUsage,
+} from "./cache-state.js";
 
 const RELOAD_SESSION_CLOSE_TIMEOUT_MS = 3_000;
 const INTERRUPT_SESSION_TIMEOUT_MS = 2_000;
@@ -1468,6 +1473,7 @@ export class AgentManager {
     return this.registerSession(session, storedConfig, resolvedAgentId, {
       ...options,
       lastTurnEndedAt: storedLastTurnEndedAt(record), // PATCH(cache-state)
+      lastUsage: storedLastUsage(record), // PATCH(cache-state)
       persistence: handle,
       restoring: true,
     });
@@ -2042,7 +2048,7 @@ export class AgentManager {
         historyPrimed: true,
         lastUserMessageAt: record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null,
         lastTurnEndedAt: storedLastTurnEndedAt(record), // PATCH(cache-state)
-        lastUsage: undefined,
+        lastUsage: storedLastUsage(record), // PATCH(cache-state): was undefined
         lastError: record.lastError ?? undefined,
         attention,
         internal: record.internal,

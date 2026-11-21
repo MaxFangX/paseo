@@ -5513,6 +5513,45 @@ test("the last turn end survives a reload and a daemon restart", async () => {
   await restartedStorage.flush();
 });
 
+// PATCH(cache-state)
+test("the context usage survives a daemon restart, loaded or not", async () => {
+  const { workdir, storage, manager, session, agentId } = await setupTurnEndAgent();
+  const usage = { contextWindowUsedTokens: 412_000, contextWindowMaxTokens: 1_000_000 };
+  session.pushEvent({ type: "usage_updated", provider: "codex", usage });
+  await manager.runAgent(agentId, "say hello");
+  await manager.closeAgent(agentId);
+  await storage.flush();
+  expect((await storage.get(agentId))?.lastUsage).toEqual(usage);
+
+  // A fresh manager and storage over the same records, as after a daemon restart.
+  const restartedStorage = new AgentStorage(join(workdir, "agents"), logger);
+  const restarted = new AgentManager({
+    clients: { codex: new TurnEndClient() },
+    registry: restartedStorage,
+    logger,
+  });
+  const loaded = await ensureAgentLoaded(agentId, {
+    agentManager: restarted,
+    agentStorage: restartedStorage,
+    logger,
+  });
+  expect(loaded.lastUsage).toEqual(usage);
+  await restarted.closeAgent(agentId);
+
+  // An agent that is only a record reports its usage from the record.
+  const stored = new Promise<ManagedAgent>((resolve) => {
+    restarted.subscribe(
+      (event) => {
+        if (event.type === "agent_state") resolve(event.agent);
+      },
+      { agentId, replayState: false },
+    );
+  });
+  await restarted.archiveSnapshot(agentId, TURN_END_T2.toISOString());
+  expect((await stored).lastUsage).toEqual(usage);
+  await restartedStorage.flush();
+});
+
 test("runAgent persists finished attention and idle status without an external snapshot subscriber", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-finished-attention-"));
   const storagePath = join(workdir, "agents");

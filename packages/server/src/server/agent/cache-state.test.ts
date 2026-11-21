@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildStoredAgentPayload } from "./agent-projections.js";
 import { parseStoredAgentRecord } from "./agent-storage.js";
-import { lastTurnEndedAtIso, noteTurnEnd, storedLastTurnEndedAt } from "./cache-state.js";
+import {
+  lastTurnEndedAtIso,
+  noteTurnEnd,
+  storedLastTurnEndedAt,
+  storedLastUsage,
+} from "./cache-state.js";
 
 const ENDED_AT = "2026-11-20T12:00:00.000Z";
 
@@ -36,7 +41,11 @@ describe("cache state", () => {
     const record = storedRecord();
 
     expect(storedLastTurnEndedAt(record)).toBeNull();
-    expect(buildStoredAgentPayload(record, ["claude"]).lastTurnEndedAt).toBeUndefined();
+    expect(storedLastUsage(record)).toBeUndefined();
+    expect(buildStoredAgentPayload(record, ["claude"])).toMatchObject({
+      lastTurnEndedAt: undefined,
+      lastUsage: undefined,
+    });
   });
 
   it("reads a stored time", () => {
@@ -44,5 +53,13 @@ describe("cache state", () => {
 
     expect(storedLastTurnEndedAt(record)).toEqual(new Date(ENDED_AT));
     expect(buildStoredAgentPayload(record, ["claude"]).lastTurnEndedAt).toBe(ENDED_AT);
+  });
+
+  it("reads stored usage", () => {
+    const usage = { contextWindowUsedTokens: 412_000, contextWindowMaxTokens: 1_000_000 };
+    const record = storedRecord({ lastUsage: usage });
+
+    expect(storedLastUsage(record)).toEqual(usage);
+    expect(buildStoredAgentPayload(record, ["claude"]).lastUsage).toEqual(usage);
   });
 });
