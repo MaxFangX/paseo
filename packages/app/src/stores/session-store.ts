@@ -78,6 +78,7 @@ export interface Agent {
   createdAt: Date;
   updatedAt: Date;
   lastUserMessageAt: Date | null;
+  lastTurnEndedAt?: string | null; // PATCH(cache-state): ISO, as on the wire; see utils/cache-state.ts
   lastActivityAt: Date;
   capabilities: AgentCapabilityFlags;
   currentModeId: string | null;
