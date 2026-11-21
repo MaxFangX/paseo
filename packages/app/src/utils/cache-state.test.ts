@@ -3,6 +3,7 @@ import {
   CACHE_TTL_MS,
   LARGE_CONTEXT_TOKENS,
   deriveCacheState,
+  formatBriefCacheStateLabel,
   formatCacheStateLabel,
   isLargeContext,
   type CacheStateInput,
@@ -73,5 +74,14 @@ describe("formatCacheStateLabel", () => {
     expect(formatCacheStateLabel({ kind: "warm", minutesLeft: 38 }, 412_000)).toBe("412k · 38m");
     expect(formatCacheStateLabel({ kind: "cold" }, 412_000)).toBe("412k · cold");
     expect(formatCacheStateLabel({ kind: "cold" }, undefined)).toBe("cold");
+  });
+});
+
+describe("formatBriefCacheStateLabel", () => {
+  it("leaves the minutes out while warm and still says cold", () => {
+    expect(formatBriefCacheStateLabel({ kind: "warm", minutesLeft: 38 }, 412_000)).toBe("412k");
+    expect(formatBriefCacheStateLabel({ kind: "warm", minutesLeft: 38 }, undefined)).toBeNull();
+    expect(formatBriefCacheStateLabel({ kind: "cold" }, 412_000)).toBe("412k · cold");
+    expect(formatBriefCacheStateLabel({ kind: "cold" }, undefined)).toBe("cold");
   });
 });

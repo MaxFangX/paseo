@@ -3,20 +3,37 @@ import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useCacheState } from "@/hooks/use-cache-state";
 import { useSessionStore, type Agent } from "@/stores/session-store";
-import { cacheStateInput, formatCacheStateLabel, isLargeContext } from "@/utils/cache-state";
+import {
+  cacheStateInput,
+  formatBriefCacheStateLabel,
+  formatCacheStateLabel,
+  isLargeContext,
+} from "@/utils/cache-state";
 import { normalizeWorkspaceOpaqueId } from "@/utils/workspace-identity";
 
 // PATCH(cache-state): the context size and prompt cache state of a Claude agent, e.g. "412k · 38m"
 // while warm and "412k · cold" once the cache has expired. See utils/cache-state.ts.
 
-function CacheStateLabel({ agent, testID }: { agent: Agent; testID: string }) {
+function CacheStateLabel({
+  agent,
+  brief = false,
+  testID,
+}: {
+  agent: Agent;
+  /** Leave the minutes out; see formatBriefCacheStateLabel. */
+  brief?: boolean;
+  testID: string;
+}) {
   const input = cacheStateInput(agent);
   const state = useCacheState(input);
   if (!state) return null;
+  const format = brief ? formatBriefCacheStateLabel : formatCacheStateLabel;
+  const label = format(state, input.usedTokens);
+  if (label === null) return null;
   const costly = state.kind === "cold" && isLargeContext(input.usedTokens);
   return (
     <Text style={[styles.label, costly && styles.costly]} numberOfLines={1} testID={testID}>
-      {formatCacheStateLabel(state, input.usedTokens)}
+      {label}
     </Text>
   );
 }
@@ -34,7 +51,8 @@ export const AgentCacheStateBadge = memo(function AgentCacheStateBadge({
 
 /**
  * A workspace row stands for several agents; it shows the one with the most context, since that
- * is the one that costs the most to wake.
+ * is the one that costs the most to wake. The row has its own time since the last activity, so the
+ * badge leaves the minutes out.
  */
 const WorkspaceCacheStateBadge = memo(function WorkspaceCacheStateBadge({
   serverId,
@@ -46,7 +64,7 @@ const WorkspaceCacheStateBadge = memo(function WorkspaceCacheStateBadge({
   const agent = useSessionStore((state) =>
     selectLargestClaudeAgent(state.sessions[serverId]?.agents, workspaceId),
   );
-  return agent ? <CacheStateLabel agent={agent} testID="workspace-cache-state" /> : null;
+  return agent ? <CacheStateLabel agent={agent} brief testID="workspace-cache-state" /> : null;
 });
 
 /**

@@ -47,3 +47,15 @@ export function formatCacheStateLabel(state: CacheState, usedTokens: number | nu
   const cache = state.kind === "warm" ? `${state.minutesLeft}m` : "cold";
   return typeof usedTokens === "number" ? `${formatTokenCount(usedTokens)} · ${cache}` : cache;
 }
+
+/**
+ * For a row that already shows how long ago its agent was active, where a second count of minutes
+ * reads as a mistake: the size alone while warm, e.g. "412k". Null with nothing to show.
+ */
+export function formatBriefCacheStateLabel(
+  state: CacheState,
+  usedTokens: number | null | undefined,
+): string | null {
+  if (state.kind === "cold") return formatCacheStateLabel(state, usedTokens);
+  return typeof usedTokens === "number" ? formatTokenCount(usedTokens) : null;
+}

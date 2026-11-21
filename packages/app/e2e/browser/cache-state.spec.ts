@@ -186,7 +186,7 @@ test.describe("cache state", () => {
     await expect(badge).toHaveText("412k · 38m", { timeout: 30_000 });
     await expectCentredOnMeter(page);
     await expect(warning).toHaveCount(0);
-    await expectSidebarRows(...rows, "412k · 38m");
+    await expectSidebarRows(...rows, "412k");
     // The badge gives way to a name that needs the room.
     expect(await badgeBesideName(rows[1], LONG_NAME)).toBe(false);
     const inputBefore = await input.boundingBox();
