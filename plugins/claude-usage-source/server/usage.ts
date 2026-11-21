@@ -424,7 +424,8 @@ export async function discover(
   return accounts;
 }
 
-function claudeKeychainRoute(lookup: ClaudeCredentialLookup) {
+// PATCH(usage-spend-share): exported to map a Keychain login back to its Claude home.
+export function claudeKeychainRoute(lookup: ClaudeCredentialLookup) {
   const env = lookup.env ?? process.env;
   const configDir = env.CLAUDE_CONFIG_DIR;
   // macOS still uses Keychain with CLAUDE_CONFIG_DIR, with an entry keyed to that directory:
