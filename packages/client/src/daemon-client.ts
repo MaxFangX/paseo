@@ -3815,7 +3815,10 @@ export class DaemonClient {
     agentId: string,
     text: string,
     options: SendMessageOptions = {},
-  ): Promise<{ deliveryStatus?: "queued" }> {
+  ): Promise<{
+    deliveryStatus?: "queued";
+    notice?: string; // PATCH(cold-send): e.g. that the prompt woke a cold agent
+  }> {
     if (
       options.sourceAgentId &&
       this.lastServerInfoMessage?.features?.agentMessageProvenance !== true
@@ -3860,7 +3863,8 @@ export class DaemonClient {
     if (!payload.accepted) {
       throw new Error(payload.error ?? "sendAgentMessage rejected");
     }
-    return payload.deliveryStatus ? { deliveryStatus: payload.deliveryStatus } : {};
+    const receipt = payload.deliveryStatus ? { deliveryStatus: payload.deliveryStatus } : {};
+    return payload.notice ? { ...receipt, notice: payload.notice } : receipt; // PATCH(cold-send)
   }
 
   async sendMessage(

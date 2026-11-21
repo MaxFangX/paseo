@@ -135,6 +135,7 @@ import {
   type NativeForkDeps,
 } from "./agent/native-fork.js"; // PATCH(native-fork)
 import { buildAgentMoveResponse } from "./agent/move-agent.js"; // PATCH(agent-move)
+import { coldSendNotice } from "./agent/cold-send.js"; // PATCH(cold-send)
 import { buildAgentPrompt } from "./agent/prompt-attachments.js";
 import type { StructuredGenerationDaemonConfig } from "./agent/structured-generation-providers.js";
 import {
@@ -8319,6 +8320,7 @@ export class Session {
 
     try {
       const agentId = resolved.agentId;
+      const coldSend = coldSendNotice(this.agentManager.getAgent(agentId)); // PATCH(cold-send)
 
       const prompt = buildAgentPrompt(msg.text, msg.images, msg.attachments);
       this.sessionLogger.trace(
@@ -8409,6 +8411,7 @@ export class Session {
           agentId,
           accepted: true,
           ...(deliveryStatus ? { deliveryStatus } : {}),
+          ...coldSend, // PATCH(cold-send)
           error: null,
         },
       });

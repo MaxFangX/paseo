@@ -5116,6 +5116,8 @@ export const SendAgentMessageResponseMessageSchema = z.object({
     agentId: z.string(),
     accepted: z.boolean(),
     deliveryStatus: z.literal("queued").optional(),
+    // PATCH(cold-send): a note for the sender, e.g. that the prompt wakes a cold agent.
+    notice: z.string().optional(),
     error: z.string().nullable(),
   }),
 });

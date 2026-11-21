@@ -114,6 +114,7 @@ import {
 } from "./types.js";
 import type { ProviderPaseoToolsPolicy } from "@getpaseo/protocol/provider-config";
 import { isPaseoToolEnabled } from "../paseo-tool-policy.js";
+import { addColdSendGuidance } from "../cold-send.js"; // PATCH(cold-send)
 
 export interface PaseoToolHostDependencies {
   agentMessages?: () => AgentMessageDelivery;
@@ -2083,6 +2084,7 @@ function createToolCatalog(
       return response;
     },
   );
+  addColdSendGuidance(localHostOperations, (id) => agentManager.getAgent(id)); // PATCH(cold-send)
 
   registerTool(
     "get_agent_status",

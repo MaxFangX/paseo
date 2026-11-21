@@ -10,12 +10,14 @@ import type {
 } from "../../output/index.js";
 import { readFile } from "node:fs/promises";
 import { extname, resolve } from "node:path";
+import { reportSendNotice } from "./send-notice.js"; // PATCH(cold-send)
 
 /** Result type for agent send command */
 export interface AgentSendResult {
   agentId: string;
   status: "queued" | "sent" | "completed" | "timeout" | "permission" | "error";
   message: string;
+  notice?: string; // PATCH(cold-send): see send-notice.ts
 }
 
 /** Schema for agent send output */
@@ -206,6 +208,7 @@ export async function runSendCommand(
       sourceAgentId,
       activeTurnBehavior: options.behavior ?? (sourceAgentId ? "steer" : "interrupt"),
     });
+    const notice = reportSendNotice(receipt.notice, options); // PATCH(cold-send)
 
     // If --no-wait, return immediately
     if (options.wait === false) {
@@ -220,6 +223,7 @@ export async function runSendCommand(
             receipt.deliveryStatus === "queued"
               ? "Message queued for delivery after two quiet seconds"
               : "Message sent, not waiting for completion",
+          ...notice, // PATCH(cold-send)
         },
         schema: agentSendSchema,
       };
@@ -230,7 +234,7 @@ export async function runSendCommand(
 
     return {
       type: "single",
-      data: buildSendResult(agentIdArg, state),
+      data: { ...buildSendResult(agentIdArg, state), ...notice }, // PATCH(cold-send)
       schema: agentSendSchema,
     };
   } catch (err) {

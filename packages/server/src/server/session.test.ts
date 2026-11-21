@@ -5885,3 +5885,53 @@ test("a failing direct source observes fire-and-forget file replies without unha
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// PATCH(cold-send)
+describe("send to a cold Claude agent", () => {
+  test.each([
+    {
+      minutesSinceTurn: 120,
+      notice: { notice: expect.stringContaining("cold with a 412K context") },
+    },
+    { minutesSinceTurn: 30, notice: {} },
+  ])(
+    "notes only a cold cache in the response ($minutesSinceTurn minutes after the last turn)",
+    async ({ minutesSinceTurn, notice }) => {
+      const messages: unknown[] = [];
+      const agent = {
+        id: "cold-agent",
+        provider: "claude",
+        lifecycle: "idle",
+        config: {},
+        lastTurnEndedAt: new Date(Date.now() - minutesSinceTurn * 60_000),
+        lastUsage: { contextWindowUsedTokens: 412_000 },
+      };
+      const session = createSessionForTest({
+        messages,
+        agentManager: {
+          getAgent: vi.fn(() => agent),
+          waitForAgentClose: vi.fn(async () => {}),
+          tryRunOutOfBand: vi.fn(() => true),
+        },
+      });
+
+      await session.handleMessage({
+        type: "send_agent_message_request",
+        requestId: "send-1",
+        agentId: "cold-agent",
+        text: "Unrelated work",
+      });
+
+      expect(messages).toContainEqual({
+        type: "send_agent_message_response",
+        payload: {
+          requestId: "send-1",
+          agentId: "cold-agent",
+          accepted: true,
+          ...notice,
+          error: null,
+        },
+      });
+    },
+  );
+});

@@ -7142,3 +7142,75 @@ describe("local durable finish subscription MCP wiring", () => {
     }
   });
 });
+
+// PATCH(cold-send)
+describe("send_agent_prompt to a cold Claude agent", () => {
+  const logger = createTestLogger();
+  const existingCwd = process.cwd();
+  const HOUR = 60 * 60_000;
+
+  async function sendToChild(child: Partial<ManagedAgent>, agentScoped: boolean) {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    const parentAgent = {
+      id: "parent-agent",
+      config: {},
+      cwd: existingCwd,
+      workspaceId: "wks_parent",
+      provider: "codex",
+      currentModeId: "full-access",
+    } as ManagedAgent;
+    const childAgent = {
+      id: "child-agent",
+      provider: "claude",
+      cwd: existingCwd,
+      lifecycle: "idle",
+      currentModeId: null,
+      availableModes: [],
+      config: { title: "Child" },
+      lastUsage: { contextWindowUsedTokens: 412_000 },
+      ...child,
+    } as ManagedAgent;
+    spies.agentManager.getAgent.mockImplementation((agentId: string) => {
+      if (agentId === "parent-agent") return parentAgent;
+      if (agentId === "child-agent") return childAgent;
+      return null;
+    });
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createOpenCodeManager().manager,
+      callerAgentId: agentScoped ? "parent-agent" : undefined,
+      logger,
+    });
+    const response = await invokeToolWithParsedInput(registeredTool(server, "send_agent_prompt"), {
+      agentId: "child-agent",
+      prompt: "Unrelated work",
+      notifyOnFinish: false,
+    });
+    return response.structuredContent.guidance as string;
+  }
+
+  it.each([
+    { agentScoped: false, guidance: "Dispatch acknowledged." },
+    { agentScoped: true, guidance: "Queued for delivery after two quiet seconds;" },
+  ])(
+    "ends the guidance with a note on the cold cache (agent-scoped: $agentScoped)",
+    async ({ agentScoped, guidance }) => {
+      const sent = await sendToChild(
+        { lastTurnEndedAt: new Date(Date.now() - 2 * HOUR) },
+        agentScoped,
+      );
+
+      expect(sent.startsWith(guidance)).toBe(true);
+      expect(sent).toMatch(
+        /\. This agent's cache was cold with a 412K context, so this prompt re-writes all of it at the cache-write price\. For work unrelated to its last task, brief a fresh agent or compact this one first\.$/,
+      );
+    },
+  );
+
+  it("leaves the guidance alone while the cache is warm", async () => {
+    const sent = await sendToChild({ lastTurnEndedAt: new Date(Date.now() - HOUR / 2) }, false);
+
+    expect(sent).not.toContain("cache was cold");
+  });
+});
