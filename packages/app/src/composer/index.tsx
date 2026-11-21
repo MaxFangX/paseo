@@ -61,6 +61,7 @@ import {
 } from "@/composer/agent-controls";
 import { ContextWindowMeter } from "@/components/context-window-meter";
 import { AgentCacheStateBadge } from "@/components/cache-state-badge"; // PATCH(cache-state)
+import { ColdSendWarning } from "@/composer/cold-send-warning"; // PATCH(cold-send)
 import { useImageAttachmentPicker } from "@/hooks/use-image-attachment-picker";
 import { selectAgentTurnPresentation, useSessionStore } from "@/stores/session-store";
 import { useFilePicker } from "@/hooks/use-file-picker";
@@ -2509,6 +2510,10 @@ function ComposerContentImpl({
             {isFullscreen ? null : <PendingSteerTrack serverId={serverId} agentId={agentId} />}
             {isFullscreen ? null : queueList}
             {!isFullscreen && sendErrorNode}
+            {/* PATCH(cold-send) */}
+            {isFullscreen ? null : (
+              <ColdSendWarning serverId={serverId} agentId={agentId} onSend={submitMessage} />
+            )}
 
             <View ref={messageInputContainerRef} style={messageInputContainerStyle}>
               <ComposerAutocompleteBinding
