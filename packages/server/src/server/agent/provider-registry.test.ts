@@ -1791,3 +1791,30 @@ describe("fetchCatalog", () => {
     expect(catalog.modes.map((mode) => mode.id)).toEqual(["ask"]);
   });
 });
+
+// PATCH(idle-retire)
+test("idleRetireMinutes in config.json reaches the Claude client's runtime settings", async () => {
+  const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const { loadConfig } = await import("../config.js");
+  const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-idle-retire-config-"));
+  try {
+    await writeFile(
+      path.join(paseoHome, "config.json"),
+      JSON.stringify({ agents: { providers: { claude: { idleRetireMinutes: 5 } } } }),
+    );
+    const config = loadConfig(paseoHome, { env: {} });
+
+    buildProviderRegistry(logger, {
+      runtimeSettings: config.agentProviderSettings,
+      providerOverrides: config.providerOverrides,
+    });
+
+    expect(mockState.constructorArgs.claude[0]?.runtimeSettings).toMatchObject({
+      idleRetireMinutes: 5,
+    });
+  } finally {
+    await rm(paseoHome, { recursive: true, force: true });
+  }
+});

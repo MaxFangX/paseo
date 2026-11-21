@@ -4,6 +4,11 @@ import {
   isSystemInjectedEnvelope,
 } from "../../agent-messages/index.js"; // PATCH(claude-resumable-stop)
 import { INTERRUPT_NOTICE, prependNotice } from "./prompt-notices.js"; // PATCH(neutral-interrupt)
+// PATCH(idle-retire)
+import type { SlashCommand as ClaudeSlashCommand } from "@anthropic-ai/claude-agent-sdk";
+import { createIdleRetirement, idleRetireTimeoutMs } from "./idle-retire/idle-retirement.js";
+import { LiveTasks } from "./idle-retire/live-tasks.js";
+import { WakerHolds } from "./idle-retire/waker-holds.js";
 import type { ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -2353,6 +2358,18 @@ class ClaudeAgentSession implements AgentSession {
   private suspendedTasks: SuspendedTask[] = [];
   /** PATCH(neutral-interrupt): an SDK interrupt was sent, so the next prompt corrects its note. */
   private interruptNoticePending = false;
+  // PATCH(idle-retire): retires the process of an idle agent; see idle-retire/idle-retirement.ts.
+  private readonly liveTasks = new LiveTasks();
+  private readonly wakerHolds = new WakerHolds();
+  private readonly idleRetirement = createIdleRetirement({
+    timeoutMs: () => idleRetireTimeoutMs(this.runtimeSettings?.idleRetireMinutes),
+    now: Date.now,
+    busy: () => this.idleRetireBusy(),
+    holdUntil: (now) => this.wakerHolds.holdUntil(now),
+    retire: () => this.retireIdleProcess(),
+    log: (message) => this.logger.info(message),
+  });
+  private lastSupportedCommands: ClaudeSlashCommand[] | null = null;
   private pendingInterruptAbort = false;
   /**
    * Whether Claude's main session is inside one of its own turns: set by system/init and by a
@@ -2708,6 +2725,53 @@ class ClaudeAgentSession implements AgentSession {
     prependNotice(message, notice);
   }
 
+  // PATCH(idle-retire): the session's side of idle-retire/idle-retirement.ts.
+  private observeIdleRetire(message: SDKMessage): void {
+    this.liveTasks.observe(message);
+    this.wakerHolds.observe(message, Date.now());
+  }
+
+  /** Counts down while a live process is idle; any other state cancels the countdown. */
+  private updateIdleRetirement(): void {
+    if (this.turnState === "idle" && this.query && !this.closed) this.idleRetirement.processIdle();
+    else this.idleRetirement.processBusy();
+  }
+
+  private idleRetireProcessEnded(): void {
+    this.idleRetirement.stop();
+    this.wakerHolds.processEnded();
+    this.liveTasks.processEnded();
+  }
+
+  /** Whether the process owns work right now: a turn, a permission, a task, or no process at all. */
+  private idleRetireBusy(): boolean {
+    return (
+      !this.query ||
+      this.closed ||
+      this.retireInFlight !== null ||
+      this.activeForegroundTurnId !== null ||
+      this.autonomousTurn !== null ||
+      this.mainTurnInFlight ||
+      this.pendingPermissions.size > 0 ||
+      this.liveTasks.count > 0 ||
+      this.taskProtocolSource.listRunningTasks().length > 0
+    );
+  }
+
+  /** Stop's retire; the countdown found no running task, so none is suspended. */
+  private async retireIdleProcess(): Promise<void> {
+    this.retireOnStop([]);
+    await this.retireInFlight;
+  }
+
+  /** With no live process, the last list answers, so listing commands never starts one. */
+  private async readSupportedCommands(): Promise<ClaudeSlashCommand[]> {
+    if (!this.query && this.lastSupportedCommands) return this.lastSupportedCommands;
+    const query = await this.ensureQuery();
+    this.lastSupportedCommands = await query.supportedCommands();
+    return this.lastSupportedCommands;
+  }
+
   async *streamHistory(): AsyncGenerator<AgentStreamEvent> {
     if (
       !this.historyPending ||
@@ -3048,6 +3112,7 @@ class ClaudeAgentSession implements AgentSession {
     // beyond the daemon's close deadline when the provider stops answering.
     this.query = null;
     this.input = null;
+    this.idleRetireProcessEnded(); // PATCH(idle-retire)
     // Terminate the entire process tree (claude + MCP children) to prevent
     // orphan accumulation. The SDK's internal cleanup may only kill the
     // direct child process.
@@ -3093,8 +3158,7 @@ class ClaudeAgentSession implements AgentSession {
   }
 
   async listCommands(): Promise<AgentSlashCommand[]> {
-    const q = await this.ensureQuery();
-    const commands = await q.supportedCommands();
+    const commands = await this.readSupportedCommands(); // PATCH(idle-retire)
     const commandMap = new Map<string, AgentSlashCommand>();
     for (const cmd of commands) {
       if (!commandMap.has(cmd.name)) {
@@ -3540,6 +3604,7 @@ class ClaudeAgentSession implements AgentSession {
     this.queryRestartNeeded = false;
     const retiredChild = this.childProcess;
     this.childProcess = null;
+    this.idleRetireProcessEnded(); // PATCH(idle-retire)
     if (retiredChild) this.terminalizeRunningRuntimeTasks(runtimeTaskOutcome);
     oldInput?.end();
     oldQuery.close?.();
@@ -3596,6 +3661,7 @@ class ClaudeAgentSession implements AgentSession {
         },
       },
     );
+    this.updateIdleRetirement(); // PATCH(idle-retire): a process started outside a turn too
     const fastMode = this.resolveFastModeSetting();
     if (fastMode !== null) {
       await this.query.applyFlagSettings({ fastMode });
@@ -3911,6 +3977,7 @@ class ClaudeAgentSession implements AgentSession {
     }
     this.logger.debug({ from: this.turnState, to: next, reason }, "Claude turn state transition");
     this.turnState = next;
+    this.updateIdleRetirement(); // PATCH(idle-retire)
   }
 
   private syncTurnState(reason: string): void {
@@ -4145,6 +4212,7 @@ class ClaudeAgentSession implements AgentSession {
       return;
     }
     this.childProcess = null;
+    this.idleRetireProcessEnded(); // PATCH(idle-retire)
     this.logger.warn(
       { agentId: this.agentId, pid: child.pid, code, signal },
       "Claude runtime exited unexpectedly",
@@ -4295,6 +4363,7 @@ class ClaudeAgentSession implements AgentSession {
       if (this.query === activeQuery) {
         this.query = null;
         this.input = null;
+        this.idleRetireProcessEnded(); // PATCH(idle-retire)
       }
     }
   }
@@ -4368,6 +4437,7 @@ class ClaudeAgentSession implements AgentSession {
   }
 
   private async routeSdkMessageFromPump(message: SDKMessage): Promise<void> {
+    this.observeIdleRetire(message); // PATCH(idle-retire)
     if (this.consumeSessionStateChange(message)) {
       return;
     }
@@ -4504,6 +4574,7 @@ class ClaudeAgentSession implements AgentSession {
     if (this.query === activeQuery) {
       this.query = null;
       this.input = null;
+      this.idleRetireProcessEnded(); // PATCH(idle-retire)
     }
     this.persistence = null;
     this.persistedHistory = [];

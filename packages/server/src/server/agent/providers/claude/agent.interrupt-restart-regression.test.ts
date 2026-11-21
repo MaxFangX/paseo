@@ -1315,3 +1315,163 @@ test("a steer Claude started is not listed as withdrawn", async () => {
   expect(canceled).not.toHaveProperty("withdrawnSteerClientMessageIds");
   await session.close();
 });
+
+// PATCH(idle-retire): an idle agent's process is retired after its idle timeout; the agent stays.
+const IDLE_MS = 60_000;
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+async function startIdleSession(sessionId: string) {
+  // Waits in the harness still run on real time; the idle countdown is advanced by hand.
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  const queries: ScriptedQuery[] = [];
+  const resumes: Array<string | undefined> = [];
+  queryFactory.mockImplementation(
+    ({ prompt, options }: { prompt: AsyncIterable<unknown>; options: { resume?: string } }) => {
+      resumes.push(options.resume);
+      const scriptedQuery = createScriptedQuery({ prompt, sessionId });
+      scriptedQuery.supportedCommands.mockResolvedValue([
+        { name: "compact", description: "Compact the conversation", argumentHint: "" },
+      ]);
+      queries.push(scriptedQuery);
+      return scriptedQuery;
+    },
+  );
+  const session = await new ClaudeAgentClient({
+    logger: createTestLogger(),
+    queryFactory,
+    resolveBinary: async () => "/test/claude/bin",
+    runtimeSettings: { idleRetireMinutes: 1 },
+  }).createSession({ provider: "claude", cwd: process.cwd() });
+  const events: AgentStreamEvent[] = [];
+  session.subscribe((event) => events.push(event));
+
+  /** Runs one turn to completion; `during` emits its frames before the result. */
+  async function runTurn(text: string, during?: (query: ScriptedQuery) => void) {
+    const turn = streamSession(session, text);
+    await turn.next();
+    await waitFor(() => queries.at(-1)?.prompts.at(-1)?.text === text);
+    const query = queries.at(-1)!;
+    during?.(query);
+    query.emit(buildSuccessResult(sessionId));
+    return collectUntilTerminal(turn);
+  }
+
+  /** Emits a frame between turns and waits until the pump has routed it. */
+  async function emitRouted(query: ScriptedQuery, message: Record<string, unknown>) {
+    const reads = query.next.mock.calls.length;
+    query.emit(message);
+    await waitFor(() => query.next.mock.calls.length > reads);
+  }
+
+  const retired = (index: number) => queries[index]?.close.mock.calls.length === 1;
+  return { session, queries, resumes, events, runTurn, emitRouted, retired };
+}
+
+test("retires an idle process and resumes the same session on the next prompt", async () => {
+  const { session, queries, resumes, events, runTurn, retired } =
+    await startIdleSession("idle-retire-session");
+  await runTurn("first prompt");
+
+  await vi.advanceTimersByTimeAsync(IDLE_MS - 1_000);
+  expect(retired(0)).toBe(false);
+  await vi.advanceTimersByTimeAsync(1_000);
+  await waitFor(() => retired(0));
+  expect(queries[0]?.interrupt).not.toHaveBeenCalled();
+  expect(events.filter((event) => event.type === "turn_failed")).toEqual([]);
+
+  const second = await runTurn("second prompt");
+  expect(second).toContainEqual(expect.objectContaining({ type: "turn_completed" }));
+  expect(queries).toHaveLength(2);
+  expect(resumes).toEqual([undefined, "idle-retire-session"]);
+  await session.close();
+});
+
+test("keeps the process while a background task runs", async () => {
+  const { session, queries, runTurn, emitRouted, retired } = await startIdleSession(
+    "idle-retire-task-session",
+  );
+  await runTurn("sleep in the background", (query) =>
+    query.emit({
+      type: "system",
+      subtype: "task_started",
+      task_id: "bash1",
+      tool_use_id: "toolu_bash",
+      task_type: "local_bash",
+      description: "sleep 300",
+      is_backgrounded: true,
+    }),
+  );
+
+  await vi.advanceTimersByTimeAsync(IDLE_MS + 10 * IDLE_MS);
+  expect(retired(0)).toBe(false);
+
+  await emitRouted(queries[0]!, {
+    type: "system",
+    subtype: "task_notification",
+    task_id: "bash1",
+    tool_use_id: "toolu_bash",
+    status: "completed",
+  });
+  await vi.advanceTimersByTimeAsync(5 * IDLE_MS);
+  await waitFor(() => retired(0));
+  await session.close();
+});
+
+test("keeps the process until an outstanding one-shot cron has fired", async () => {
+  const { session, runTurn, retired } = await startIdleSession("idle-retire-cron-session");
+  const fireAt = Date.now() + 3 * IDLE_MS;
+  await runTurn("remind me in three minutes", (query) => {
+    query.emit({
+      type: "assistant",
+      message: {
+        content: [
+          {
+            type: "tool_use",
+            id: "toolu_cron",
+            name: "CronCreate",
+            input: { cron: "3 * * * *", prompt: "ping", recurring: false },
+          },
+        ],
+      },
+    });
+    query.emit({
+      type: "user",
+      parent_tool_use_id: null,
+      message: {
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: "toolu_cron",
+            content: "Scheduled one-shot task e8805eec (3 * * * *).",
+          },
+        ],
+      },
+      tool_use_result: { id: "e8805eec", recurring: false, durable: false, nextFireAt: fireAt },
+    });
+  });
+
+  // Held through the fire time and its two-minute grace.
+  await vi.advanceTimersByTimeAsync(4.5 * IDLE_MS);
+  expect(retired(0)).toBe(false);
+  await vi.advanceTimersByTimeAsync(IDLE_MS);
+  await waitFor(() => retired(0));
+  await session.close();
+});
+
+test("lists commands of a retired process without starting another", async () => {
+  const { session, queries, retired } = await startIdleSession("idle-retire-commands-session");
+  const commands = await session.listCommands!();
+  expect(commands.map((command) => command.name)).toContain("compact");
+  expect(queries).toHaveLength(1);
+
+  // A process started outside a turn is retired too.
+  await vi.advanceTimersByTimeAsync(IDLE_MS);
+  await waitFor(() => retired(0));
+
+  expect(await session.listCommands!()).toEqual(commands);
+  expect(queries).toHaveLength(1);
+  await session.close();
+});

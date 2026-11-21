@@ -26,6 +26,7 @@ export const ProviderRuntimeSettingsSchema = z.object({
   command: ProviderCommandSchema.optional(),
   env: z.record(z.string(), z.string()).optional(),
   disallowedTools: z.array(z.string()).optional(),
+  idleRetireMinutes: z.number().int().min(0).optional(), // PATCH(idle-retire)
 });
 
 export const ProviderPaseoToolsPolicySchema = z.object({
@@ -60,6 +61,7 @@ export const ProviderOverrideSchema = z.object({
   models: z.array(ProviderProfileModelSchema).optional(),
   additionalModels: z.array(ProviderProfileModelSchema).optional(),
   disallowedTools: z.array(z.string()).optional(),
+  idleRetireMinutes: z.number().int().min(0).optional(), // PATCH(idle-retire)
   paseoTools: ProviderPaseoToolsPolicySchema.optional(),
   enabled: z.boolean().optional(),
   order: z.number().optional(),

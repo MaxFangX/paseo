@@ -250,7 +250,12 @@ function getProviderClientFactory(provider: string): ProviderClientFactory {
 }
 
 function toRuntimeSettings(override?: ProviderOverride): ProviderRuntimeSettings | undefined {
-  if (!override?.command && !override?.env && !override?.disallowedTools) {
+  if (
+    !override?.command &&
+    !override?.env &&
+    !override?.disallowedTools &&
+    override?.idleRetireMinutes === undefined // PATCH(idle-retire)
+  ) {
     return undefined;
   }
 
@@ -263,6 +268,7 @@ function toRuntimeSettings(override?: ProviderOverride): ProviderRuntimeSettings
       : undefined,
     env: override.env,
     disallowedTools: override.disallowedTools,
+    idleRetireMinutes: override.idleRetireMinutes, // PATCH(idle-retire)
   };
 }
 
@@ -287,7 +293,16 @@ function mergeRuntimeSettings(
       base?.disallowedTools || override?.disallowedTools
         ? [...(base?.disallowedTools ?? []), ...(override?.disallowedTools ?? [])]
         : undefined,
+    idleRetireMinutes: mergeIdleRetireMinutes(base, override), // PATCH(idle-retire)
   };
+}
+
+// PATCH(idle-retire): outside mergeRuntimeSettings, which is at the complexity cap.
+function mergeIdleRetireMinutes(
+  base: ProviderRuntimeSettings | undefined,
+  override: ProviderRuntimeSettings | undefined,
+): number | undefined {
+  return override?.idleRetireMinutes ?? base?.idleRetireMinutes;
 }
 
 function applyOverrideToDefinition(
