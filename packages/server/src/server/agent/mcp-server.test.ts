@@ -4516,6 +4516,67 @@ describe("send_agent_prompt MCP tool", () => {
     }
   });
 
+  // PATCH(quiet-compact)
+  it("does not notify the caller when a created child's compaction ends", async () => {
+    const workdir = await mkdtemp(join(tmpdir(), "mcp-quiet-compact-"));
+    const storage = new AgentStorage(join(workdir, "agents"), logger);
+    const parentClient = new HeldTurnAgentClient("claude", false);
+    const childClient = new HeldTurnAgentClient("codex", true);
+    const agentManager = new AgentManager({
+      clients: { claude: parentClient, codex: childClient },
+      registry: storage,
+      logger,
+    });
+
+    try {
+      const parent = await agentManager.createAgent(
+        { provider: "claude", cwd: existingCwd },
+        undefined,
+        { workspaceId: "wks_parent" },
+      );
+      const server = await createAgentMcpServer({
+        agentManager,
+        agentStorage: storage,
+        callerAgentId: parent.id,
+        providerSnapshotManager: createOpenCodeManager().manager,
+        logger,
+      });
+      const created = await invokeToolWithParsedInput(registeredTool(server, "create_agent"), {
+        relationship: { kind: "subagent" },
+        workspace: { kind: "current" },
+        title: "Compacted Child",
+        provider: "codex/gpt-5.4",
+        initialPrompt: "Start a build in the background",
+      });
+      const childId = z.object({ agentId: z.string() }).parse(created.structuredContent).agentId;
+      await vi.waitFor(() => expect(agentManager.getAgent(childId)?.lifecycle).toBe("running"));
+      const childSession = childClient.sessions[0]!;
+      function finishNotifications() {
+        return (parentClient.sessions[0]?.prompts ?? []).filter((prompt) =>
+          prompt.includes(`Agent ${childId} (Compacted Child) finished.`),
+        );
+      }
+      childSession.finishTurn("Build started; waiting");
+      await vi.waitFor(() => expect(finishNotifications()).toHaveLength(1));
+
+      const compaction = agentManager.runAgent(childId, "/compact");
+      await vi.waitFor(() => expect(agentManager.getAgent(childId)?.lifecycle).toBe("running"));
+      childSession.finishTurn("Compacted");
+      await compaction;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(finishNotifications()).toHaveLength(1);
+
+      // The child's own turns are still reported.
+      childSession.startAutonomousTurn();
+      await vi.waitFor(() => expect(agentManager.getAgent(childId)?.lifecycle).toBe("running"));
+      childSession.finishTurn("Build passed");
+      await vi.waitFor(() => expect(finishNotifications()).toHaveLength(2));
+      expect(finishNotifications()[1]).toContain("Build passed");
+    } finally {
+      await removeAgentStateDir(agentManager, storage, workdir);
+    }
+  });
+
   it("reports queue admission before the background prompt starts", async () => {
     const workdir = await mkdtemp(join(tmpdir(), "mcp-background-send-status-"));
     const storage = new AgentStorage(join(workdir, "agents"), logger);

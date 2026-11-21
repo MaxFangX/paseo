@@ -92,6 +92,7 @@ import {
 } from "./provider-subagents/store.js";
 import { withTimeout } from "../../utils/promise-timeout.js";
 import { extractAttention } from "../persistence-hooks.js";
+import { noteTurnStart } from "./quiet-turns.js"; // PATCH(quiet-compact)
 
 const RELOAD_SESSION_CLOSE_TIMEOUT_MS = 3_000;
 const INTERRUPT_SESSION_TIMEOUT_MS = 2_000;
@@ -433,6 +434,7 @@ interface ManagedAgentBase {
   lastUsage?: AgentUsage;
   lastError?: string;
   attention: AttentionState;
+  quietTurn?: boolean; // PATCH(quiet-compact): see quiet-turns.ts
   foregroundTurnWaiters: Set<ForegroundTurnWaiter>;
   finalizedForegroundTurnIds: Set<string>;
   unsubscribeSession: (() => void) | null;
@@ -2665,6 +2667,7 @@ export class AgentManager {
       pendingRun.start = { status: "started", turnId };
       agent.activeForegroundTurnId = turnId;
       this.openActiveTurn(agent, turnId, turnStartedAt);
+      noteTurnStart(agent, prompt); // PATCH(quiet-compact)
       agent.lifecycle = "running";
       this.touchUpdatedAt(agent);
       // AgentManager owns the accepted-turn boundary. Publish liveness before the canonical
@@ -4731,6 +4734,7 @@ export class AgentManager {
       return;
     }
     this.runs.trackAutonomousRun(agent.id, eventTurnId ?? null);
+    noteTurnStart(agent, null); // PATCH(quiet-compact)
     if (eventTurnId) {
       this.openActiveTurn(agent, eventTurnId, new Date());
     }
@@ -5007,6 +5011,11 @@ export class AgentManager {
 
     // Skip if already requires attention
     if (agent.attention.requiresAttention) {
+      return;
+    }
+
+    // PATCH(quiet-compact): the end of a compaction leaves a read agent read.
+    if (currentStatus === "idle" && agent.quietTurn) {
       return;
     }
 

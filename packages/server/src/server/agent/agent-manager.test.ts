@@ -5315,6 +5315,33 @@ test("archiveAgent does not cascade to a detached former child", async () => {
   expect((await storage.get(child.id))?.archivedAt).toBeFalsy();
 });
 
+// PATCH(quiet-compact)
+test("a compaction turn leaves a read agent read", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-quiet-compact-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const manager = new AgentManager({
+    clients: { codex: new TestAgentClient() },
+    registry: storage,
+    logger,
+  });
+  const agent = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+    workspaceId: undefined,
+  });
+  function attention() {
+    return manager.getAgent(agent.id)?.attention.requiresAttention;
+  }
+
+  await manager.runAgent(agent.id, "say hello");
+  expect(attention()).toBe(true);
+  await manager.clearAgentAttention(agent.id);
+
+  await manager.runAgent(agent.id, "/compact");
+  expect(attention()).toBe(false);
+
+  await manager.runAgent(agent.id, "say hello again");
+  expect(attention()).toBe(true);
+});
+
 test("runAgent persists finished attention and idle status without an external snapshot subscriber", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-finished-attention-"));
   const storagePath = join(workdir, "agents");

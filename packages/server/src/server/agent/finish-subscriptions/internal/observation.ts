@@ -9,6 +9,7 @@ import { openFinishObservation } from "./observation-stream.js";
 import type { AgentStreamEvent } from "../../agent-sdk-types.js";
 import type { AgentSnapshotPayload } from "@getpaseo/protocol/messages";
 import type { FinishObservation } from "../index.js";
+import { endsQuietTurn } from "../../quiet-turns.js"; // PATCH(quiet-compact)
 
 export function createFinishObservation(input: {
   agentManager: AgentManager;
@@ -78,6 +79,7 @@ export function createFinishObservation(input: {
               ].includes(event.event.type)
             ) {
               const current = agentManager.getAgent(agentId);
+              if (current && endsQuietTurn(current, event.event)) return; // PATCH(quiet-compact)
               if (current) publish(toAgentPayload(current, { title: stored?.title }), event.event);
             }
           },
