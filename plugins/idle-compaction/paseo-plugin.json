@@ -1,0 +1,5 @@
+{
+  "id": "idle-compaction",
+  "description": "Compacts large idle Claude agents before their prompt cache expires",
+  "requirements": { "paseo": ">=0.13.0" }
+}
